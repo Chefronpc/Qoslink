@@ -1,1 +1,3 @@
 # Qoslink
+
+Qoslink - skrypt konfigurujący w systemie Linux sieć IP składającą się z wirtualnych łączy, switchy oraz routerów wraz z ustalaiem parametrów transmisji <przepustowości, opóźnienia, gubienia oraz duplikowania pakietów niezależnie dla poszczególnych łączy. Działanie skryptu oparte jest na technologii kontenerów Docker, routingu opartego na oprogramowaniu Guagga, Traffic Contol (TC), module NetEM i skrypcie pipework autorstwa Jerome Petazzoni Możliwość podpinania hostów Docker, maszyn wirtualnych KVM, GNS itp poprzez linuksowe bridge.
