@@ -64,8 +64,43 @@ freecontainer() {
   die 5 "Brak wolnych kontenerów"
 }
  
-freecontainer host1
-exit 0
+ 
+# Sprawdza dostępność interfejsów w kontenerze
+# We - $1 nazwa interfejsu w kontenerze $2
+# We - $2 nazwa kontenera
+# --------------------------
+checkinterface() {
+  LISTINTERFACE=(`docker exec $2 ip a | awk -F': ' '{print $2}' | awk -F@ '/./ {print $1}' `)
+  for (( CNT=0; CNT<${#LISTINTERFACE[@]}; CNT++ )) ; do
+    if [[ "$1" = "${LISTINTERFACE[$CNT]}" ]] ; then
+      return 0
+    fi
+  done
+  return 1
+}
+ 
+# Zwraca numer pierwszego wolnego interfejsu w kontenerze
+# We - $1 nazwa kontenera
+# Wy - nazwa interfejsu w kontenerze $1
+# --------------------------------
+freeinterface() {
+  LISTINTERFACE=(`docker exec $1 ip a | awk -F': ' '{print $2}' | awk -F@ '/./ {print $1}' `)
+  for (( CNT=0; CNT<$CNTMAX; CNT++ )) ; do
+    PASS=0 
+    for (( CNT2=0; CNT2<${#LISTINTERFACE[@]}; CNT2++ )) ; do
+      if [[ "$IFPREFIX$CNT" = "${LISTINTERFACE[$CNT2]}" ]] ; then 
+        PASS=1
+      fi
+    done
+    if [[ $PASS -eq 0 ]] ; then
+      IFNAME=$IFPREFIX$CNT 		# Wyszukana wolna nazwa dla nowego interfejsu
+      return 0
+    fi
+  done
+  die 5 "Brak wolnych interfejsow"
+}
+
+ 
 
 
 # ---------------------------------------------------------------------------------------------
@@ -90,8 +125,20 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
     if [ ${PARAM[$CNT]} = ${WSK[$CNT2]} ] ; then
       CFG[$CNT2]=${PARAM[$CNT+1]}
-      if [ ${PARAM[$CNT]} = "-update" ] ; then
-        CFG[$CNT2]=1
+      if [ ${PARAM[$CNT]} = "-update" ] ; then		# Zapis dotyczącej aktualizacji danych 
+        CFG[$CNT2]=0
+      fi
+      if [ ${PARAM[$CNT]} = "-v" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
+        CFG[$CNT2]=0
+      fi
+      if [ ${PARAM[$CNT]} = "-L" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
+        CFG[$CNT2]=0
+      fi
+      if [ ${PARAM[$CNT]} = "-S" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
+        CFG[$CNT2]=0
+      fi
+      if [ ${PARAM[$CNT]} = "-R" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
+        CFG[$CNT2]=0
       fi
     fi
   done
@@ -123,14 +170,56 @@ if [[ -z ${CFG[0]} ]] || [[ -z ${CFG[1]} ]] ; then
   die 1 "Brak nazwy hosta lub obu hostów - opcje -h1 lub -h2"
 fi
 
-# -----  Weryfikacja bridgy  ----------
-if checkbridge "${CFG[6]}"; then
-  die 3 "Nazwa bridge'a z opcji -h1 ${CFG[6]} jest już utworzona w systemie"
-fi
-if checkbridge "${CFG[7]}"; then
-  die 4 "Nazwa Bridge'a z opcji -h2 ${CFG[7]} jest już utworzona w systemie"
+# -----  Weryfikacja nazwy kontenera  -------
+if [[ -n ${CFG[0]} ]] ; then
+  if checkcontainer "${CFG[0]}" ; then
+    die 3 "Nazwa kontenera z opcji -c ${CFG[0]} jest już utworzona w systemie"
+  fi
 fi
 
+# -----  Weryfikacja bridgy  ----------
+if [[ -n ${CFG[7]} ]] ; then
+  if checkbridge "${CFG[7]}" ; then
+    die 4 "Nazwa bridge'a z opcji -br1 ${CFG[7]} jest już utworzona w systemie"
+  fi
+fi
+
+if [[ -n ${CFG[8]} ]] ; then
+  if checkbridge "${CFG[8]}" ; then
+    die 5 "Nazwa Bridge'a z opcji -br2 ${CFG[8]} jest już utworzona w systemie"
+  fi
+fi
+
+# -----  Weryfikacja interfejsow  -----
+if [[ -n ${CFG[3]} ]] ; then
+  if checkinterface "${CFG[3]}" "${CFG[1]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
+  fi
+fi
+
+if [[ -n ${CFG[4]} ]] ; then
+  if checkinterface "${CFG[4]}" "${CFG[2]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
+  fi
+fi
+
+# ----  Weryfikacja poprawności IP1
+if [[ -n ${CFG[5]} ]] ; then
+  if parseip ${CFG[5]}  ; then
+    : # :
+  else
+    die 8 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
+  fi
+fi
+
+# ----  Weryfikacja poprawności IP2
+if [[ -n ${CFG[6]} ]] ; then
+  if parseip ${CFG[6]}  ; then
+    : # :
+  else
+    die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
+  fi
+fi
 
 
 
