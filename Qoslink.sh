@@ -1,6 +1,7 @@
 #!/bin/bash
-
 set -e
+
+#  set +x
 
 # Zmienne Globalne
 # ----------------
@@ -11,6 +12,7 @@ CNTMAX=256
 IFNAME="eth"
 IFMAX=32
           
+		  
 # Sprawdza dostępność bridga 
 # We - nazwa bridga
 # --------------------------
@@ -41,6 +43,19 @@ freebridge() {
       return $BRNAME$CNT
     fi
   done
+}
+
+# Sprawdza dostępność kontenera
+# We - $1 nazwa kontenera
+# --------------------------
+checkcontainer() {
+  LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<${#LISTCONTAINER[@]}; CNT++ )) ; do
+    if [[ "$1" = "${LISTCONTAINER[$CNT]}" ]] ; then
+      return 0
+    fi
+  done
+  return 1
 }
  
 # Zwraca numer pierwszego wolnego kontenera
@@ -100,7 +115,21 @@ freeinterface() {
   die 5 "Brak wolnych interfejsow"
 }
 
- 
+
+# Sprawdza poprawnosc parametrow sieci
+# We - $1 IP/Netmask
+# ------------------------------------
+parseip() {
+#  ANS1=(`echo $1 | grep -E "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/([2-9]|[12][0-9])"`)
+  ANS1=(`echo $1 | grep -E "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/"`)
+  M=(`echo $1 | awk -F/ '{print $2}' `)
+  IP=(`echo $1 | awk -F/ '{print $1}' | awk -F. '{print $1,$2,$3,$4}' `)
+  if [[ -n $ANS1 ]] && [[ "$M" -gt  "1" ]] && [[ "$M" -lt "30" ]] ; then
+    return 0		# IP/mask poprawne
+  else
+    return 1		# IP/mask błędne
+  fi
+}
 
 
 # ---------------------------------------------------------------------------------------------
