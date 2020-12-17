@@ -242,12 +242,12 @@ checkip() {
 #         nowy wolny adres w danej sieci
 freeip() {
   comparenet $1 "0.0.0.0"
-#  echo ${M1[@]}
-#  echo ${IP1[@]}
-#  echo ${MASK1[@]}
-#  echo ${NET1[@]}
-#  echo ${BROADCAST1[@]}
-#  echo ${NET1[3]}
+#  echo ${M1[@]}  # rem
+#  echo ${IP1[@]}  # rem
+#  echo ${MASK1[@]}  # rem
+#  echo ${NET1[@]}  # rem
+#  echo ${BROADCAST1[@]}  # rem
+#  echo ${NET1[3]}  # rem
   
   NEGM[3]=$[256-${MASK1[3]}]			
   NEGM[2]=$[256-${MASK1[2]}]
@@ -261,42 +261,42 @@ freeip() {
 # ------------------------------------------------------------------------- 
   LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
-    echo =
-    echo =============  kontener  ${LISTCONTAINER[$CNT2]}  ===================
+#    echo =  # rem
+#    echo =============  kontener  ${LISTCONTAINER[$CNT2]}  =================== # rem
     LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
     let LISTIPMAX=${#LISTIP[@]}
     for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
-      echo =
-      echo =============  IP   ${LISTIP[$CNT]}  ===================
-      echo =============  IP   ${LISTIP[@]}  ===================
+#      echo =  # rem
+#      echo =============  IP   ${LISTIP[$CNT]}  ===================  # rem
+#      echo =============  IP   ${LISTIP[@]}  ===================  # rem
       for (( I0=$IM0; I0<=${BROADCAST1[0]}; I0++ )) ; do
         for (( I1=$IM1; I1<=${BROADCAST1[1]}; I1++ )) ; do
           for (( I2=$IM2; I2<=${BROADCAST1[2]}; I2++ )) ; do
             for (( I3=$IM3; I3<=$[BROADCAST1[3]-1]; I3++ )) ; do
-              echo "Memory" "$IM0.$IM1.$IM2.$IM3"
-              comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} "1"
+#              echo "Memory" "$IM0.$IM1.$IM2.$IM3"  # rem
+              comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} "0"
                if [[ "$NET" -eq "1" ]] ; then		
-                 echo "1a:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "1a:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                  I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};   # Zakończenie 4 pętli - przejscie do nastepnego IP
-                 echo "1b:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "1b:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                  if [[ "$CNT" -gt "$LISTIPMAX" ]] ; then
                    CNT2=$[CNT2+1]; CNT=0
                    break
                  fi
                fi              
                if [[ "$NET" -eq "3" ]] ; then
-                 echo "3a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "3a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                  LISTIM[${#LISTIM[@]}]=${LISTIP[$CNT]}
-                 echo Lista IP z podsieci: ${LISTIM[@]}
+#                 echo Lista IP z podsieci: ${LISTIM[@]}  # rem
                  IM3=$I3; IM2=$I2; IM1=$I1; IM0=$I0 # Pozostałe sieci przeszukuje od 
 						    # od ostatniego wolnego IP
                  I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};
-                 echo "3b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "3b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                fi
                if [[ "$NET" -eq "2" ]] ; then
-                 echo "2a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "2a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} # rem
                  I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};
-                 echo "2b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+#                 echo "2b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} # rem
                fi
             done
           done
@@ -305,32 +305,30 @@ freeip() {
     done
   done
 
-echo =========================================================================
-echo =========================================================================
-echo =========================================================================
+#echo ========================================================================= #rem
 # ----- Wyszukanie pierwszego wolnego IP w zadanej podsieci
 # ---------------------------------------------------------
   I3=$[NET1[3]+1]; I2=${NET1[2]}; I1=${NET1[1]}; I0=${NET1[0]} # Pierwszy adres sieci
   B3=$[BROADCAST1[3]-1]; B2=${BROADCAST1[2]}; B1=${BROADCAST1[1]}; B0=${BROADCAST1[0]}
-  echo "#10: Broadcast $B0.$B1.$B2.$B3"
   CNTMAX=${#LISTIM[@]}; CNT2MAX=${#LISTIM[@]}
 
   for (( CNT2=0; CNT2<$CNT2MAX; CNT2++ )) ; do
-    echo =============  IP   ${LISTIM[@]}  ===================
-    echo "#01: ${LISTIM[@]}"
+#    echo ====  Lista adresow IP używanych w danej podsieci  ==== # rem
+#    echo "${LISTIM[@]}" # rem
+#    echo ========================================================================= # rem
+    STAT=0			# Status zmieni się jeżeli znajdzie się wolny 
+         			# adres IP zakończy się zewnętrzna pętla CNT2
     for (( CNT=0; CNT<$CNTMAX; CNT++ )) ; do
-      echo "#02: =============  IP   ${LISTIM[$CNT]}  ==================="
-      echo "#03: Actual" "$I0.$I1.$I2.$I3"
-      comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIM[$CNT]} "1"
+#      echo "Cykl: $CNT2 # rem
+#      echo "====  IP  ${LISTIM[$CNT]}  ==== # rem
+      comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIM[$CNT]} "0"
       if [[ "$NET" -eq "0" ]] ; then
-        # echo "#04: $NET====" "$I0.$I1.$I2.$I3/$M1" ${LISTIIM[$CNT]}
+        STAT=1
+#        echo "====  Zgodne IP - $I0.$I1.$I2.$I3/$M1 - przesunieice na koniec listy" # rem
         # Zamiana pozycji miejscami - skraca czas wyszukiwania
         CNTMAX2=$[CNTMAX-1]
         TMP=${LISTIM[$CNT]}; LISTIM[$CNT]=${LISTIM[$CNTMAX2]}; LISTIM[$CNTMAX2]=$TMP   
         CNTMAX=$[CNTMAX-1]      # Nie przeszukuje powtornie znalezionego zgodnego adresu
-        echo "#05: ${LISTIM[@]}"
-        echo "#08: Actual  $I0.$I1.$I2.$I3/$M1"
-        echo "#09: Broadcast  $B0.$B1.$B2.$B3"
         if [[ "$I3" -lt "$B3" ]] ; then
           I3=$[I3+1]              
         else
@@ -351,16 +349,17 @@ echo =========================================================================
             fi
           fi 
         fi
-        echo "#06: Actual" "$I0.$I1.$I2.$I3/$M1"
-      else
-        echo "#07: $NET====" "$I0.$I1.$I2.$I3/$M1" ${LISTIIM[$CNT]}
+#        echo "====  Nastepne IP do sprawdzenia: $I0.$I1.$I2.$I3/$M1" # rem
       fi
     done
+    if [[ "$STAT" -eq "0" ]] ; then
+      CNT2=CNT2MAX
+    fi
   done
 
-  echo " -----------------------------------"
-  echo " WOLNY ADRES IP:  $I0.$I1.$I2.$I3/$M1"
-  echo " -----------------------------------"
+#  echo " -----------------------------------" # rem
+#  echo " WOLNY ADRES IP:  $I0.$I1.$I2.$I3/$M1" # rem
+#  echo " -----------------------------------" # rem
   return
 }
 
