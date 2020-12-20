@@ -13,6 +13,35 @@ IFPREFIX="eth"
 IFMAX=32
 NETDEFAULT="10.1.1.0/24" # Domyślny adres sieci. Obsluga 254 sieci.
 
+
+# Komunikaty komentarzy i błędów
+# ------------------------------
+msg () {			# Komentarze wyswietlane przy ustawionej opcji  -v
+  if [[ ${CFG[21]} ]] ; then
+    echo $1$2$3
+  fi
+}
+
+msg2 () {			# Komunikaty debugowania wyswietlane przy ustawionej opcji  -V
+  if [[ ${CFG[22]} ]] ; then
+    echo $1$2$3
+  fi
+}
+
+err () {
+#  if [[ ${CFG[22]} ]] ; then   # Ustawić prawidlowy numer $CFG[xx]
+    echo "$@" >&2
+#  fi
+}
+die () {
+  status="$1"
+  shift
+  err "$@"
+  exit "$status"
+}
+
+
+# Weryfikacja wprowadzonych parametrów i ich zależności
           
 # Sprawdza dostępność bridga 
 # We - $1 nazwa bridga
@@ -127,8 +156,10 @@ parseip() {
   M=(`echo $1 | awk -F/ '{print $2}' `)
   IP=(`echo $1 | awk -F/ '{print $1}' | awk -F. '{print $1,$2,$3,$4}' `)
   if [[ -n $ANS1 ]] && [[ "$M" -gt  "1" ]] && [[ "$M" -lt "30" ]] ; then
+    msg2 "Parse IP - poprawne"
     return 0		# IP/mask poprawne
   else
+    msg2 "Parse IP - niepoprawne"
     return 1		# IP/mask błędne
   fi
 }
@@ -139,7 +170,7 @@ parseip() {
 # We - $3 1 Widoczność komunikatów,    0 - brak
 # ----------------------------
 comparenet() {
-#echo ========  $1  ==  $2    ========
+  msg2 "Comprenet:   ====  $1  =   $2    ===="
   M1=(`echo $1 | awk -F/ '{print $2}' `)
   M2=(`echo $2 | awk -F/ '{print $2}' `)
   IP1=(`echo $1 | awk -F/ '{print $1}' | awk -F. '{print $1,$2,$3,$4}' `)
@@ -156,27 +187,27 @@ comparenet() {
       if [[ "${IP1[0]}" -eq "${IP2[0]}" ]] && [[ "${IP1[1]}" -eq "${IP2[1]}" ]] && [[ "${IP1[2]}" -eq "${IP2[2]}" ]] && [[ "${IP1[3]}" -eq "${IP2[3]}" ]] ; then		
         NET=0		# Konflikt adresów IP
         if [[ "$3" -eq "1" ]] ; then 
-          msg 16 "Konflikt adresów IP:  $1"
+          msg2 "Konflikt adresów IP:  $1"
         fi
         return 
       else
         NET=3		# Podsieci zgodne, IP bez konfliktu
         if [[ "$3" -eq "1" ]] ; then 
-          msg "Adresy sieci zgodne -ip1:$1  -ip2:$2, IP bez konfliktu"
+          msg2 "Adresy sieci zgodne -ip1:$1  -ip2:$2, IP bez konfliktu"
         fi
         return
       fi
     else
       NET=2  		# Różne podsieci 
       if [[ "$3" -eq "1" ]] ; then 
-        msg "Adresy sieci $1 $2 niezgodne"
+        msg2 "Adresy sieci $1 $2 niezgodne"
       fi
       return
     fi
   else
     NET=1			# Różne długości maski
     if [[ "$3" -eq "1" ]] ; then 
-      msg "Różne długości adresu sieci (maski) $1 $2"
+      msg2 "Różne długości adresu sieci (maski) $1 $2"
     fi
     return
   fi
@@ -189,6 +220,7 @@ comparenet() {
 # We - $2 nazwa kontenera
 # ------------------------------------
 checkip() {
+  msg "Weryfikacja adresu IP $1 w kontenerze $2" 
   if parseip "$1" ; then
     LISTIP=(`docker exec $2 ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
  #   echo ${LISTIP[@]}
@@ -235,17 +267,20 @@ checkip() {
   fi
 }
 
-# Zwraca wolny adres IP dla danej sieci 
+# Zwraca wolny adres IP dla sieci zgodnej z zadanym IP
+# uwzgledniajac konfiguracje IP wszystkich kontenerow
+# ----------------------------------------------------
 # We - $1 Adres IP/Mask do którego ma być wyszukany
 #         nowy wolny adres w danej sieci
 freeip() {
   comparenet $1 "0.0.0.0"
-#  echo ${M1[@]}
-#  echo ${IP1[@]}
-#  echo ${MASK1[@]}
-#  echo ${NET1[@]}
-#  echo ${BROADCAST1[@]}
-#  echo ${NET1[3]}
+  msg "Wyszukiwanie wolnego adresu IP w podsieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  msg2 ${M1[@]}  # rem
+  msg2 ${IP1[@]}  # rem
+  msg2 ${MASK1[@]}  # rem
+  msg2 ${NET1[@]}  # rem
+  msg2 ${BROADCAST1[@]}  # rem
+  msg2 ${NET1[3]}  # rem
   
   NEGM[3]=$[256-${MASK1[3]}]			
   NEGM[2]=$[256-${MASK1[2]}]
@@ -253,58 +288,58 @@ freeip() {
   NEGM[0]=$[256-${MASK1[0]}]
   CNTIP=$[NEGM[3]*NEGM[2]*NEGM[1]*NEGM[0]-2]		# obliczanie całkowitej ilości adresów IP w danej sieci
 
-  IM3=${NET1[3]}; IM2=${NET1[2]}; IM1=${NET1[1]}; IM0=${NET1[0]}
- 
+  IM3=$[NET1[3]+1]; IM2=${NET1[2]}; IM1=${NET1[1]}; IM0=${NET1[0]} # Pierwszy adres sieci
+
+  # ---- Dopisanie do listy zarezerwowanych IP, adresów podanych przez użytkownika
+  # ------------------------------------------------------------------------------
+  unset LISTIM[*]
+  if [[ -n ${CFG[5]} ]] ; then
+    LISTIM[${#LISTIM[@]}]=${CFG[5]}
+  fi
+  if [[ -n ${CFG[6]} ]] ; then
+    LISTIM[${#LISTIM[@]}]=${CFG[6]}
+  fi
+
+# ----- Wyszukiwanie w kontenerach adresow IP zgodnych z siecią zadanego IP
+# ------------------------------------------------------------------------- 
   LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
-    echo =
-    echo =============  kontener  ${LISTCONTAINER[$CNT2]}  ===================
+    msg2 "="  # rem
+    msg2 "=============  kontener  ${LISTCONTAINER[$CNT2]}  ===================" # rem
     LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
     let LISTIPMAX=${#LISTIP[@]}
     for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
-      echo =
-      echo =============  IP   ${LISTIP[$CNT]}  ===================
-      echo =============  IP   ${LISTIP[@]}  ===================
-      for (( I0=${NET1[0]}; I0<=${BROADCAST1[0]}; I0++ )) ; do
-    #    if [[ "$NET" -eq "3" ]] ; then
-          I0=$IM0
-    #    fi
-        for (( I1=${NET1[1]}; I1<=${BROADCAST1[1]}; I1++ )) ; do
-    #      if [[ "$NET" -eq "3" ]] ; then
-            I1=$IM1
-    #      fi 
-          for (( I2=${NET1[2]}; I2<=${BROADCAST1[2]}; I2++ )) ; do
-    #        if [[ "$NET" -eq "3" ]] ; then
-              I2=$IM2
-    #        fi
-            for (( I3=$[NET1[3]+1]; I3<=$[BROADCAST1[3]-1]; I3++ )) ; do
-    #          if [[ "$NET" -eq "3" ]] ; then
-                I2=$IM2
-    #          fi
-              echo "Memory" "$IM0.$IM1.$IM2.$IM3"
-              comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} "1"
+      msg2 "="  # rem
+      msg2 "=============  IP   ${LISTIP[$CNT]}  ==================="  # rem
+      msg2  "=============  IP   ${LISTIP[@]}  ==================="  # rem
+      for (( I0=$IM0; I0<=${BROADCAST1[0]}; I0++ )) ; do
+        for (( I1=$IM1; I1<=${BROADCAST1[1]}; I1++ )) ; do
+          for (( I2=$IM2; I2<=${BROADCAST1[2]}; I2++ )) ; do
+            for (( I3=$IM3; I3<=$[BROADCAST1[3]-1]; I3++ )) ; do
+              msg2 "Memory:  $IM0.$IM1.$IM2.$IM3"  # rem
+              comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} "0"
                if [[ "$NET" -eq "1" ]] ; then		
-                 echo "1a:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
-                 I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};
-                 echo "1b:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
-                # CNT=$[CNT+2]; I3=$[I3-1]
+                 msg2 "1a:  $NET"  "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
+                 I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};   # Zakończenie 4 pętli - przejscie do nastepnego IP
+                 msg2 "1b:  $NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                  if [[ "$CNT" -gt "$LISTIPMAX" ]] ; then
                    CNT2=$[CNT2+1]; CNT=0
                    break
                  fi
                fi              
                if [[ "$NET" -eq "3" ]] ; then
-                 echo "3a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
-                 IM3=$I3; IM2=$I2; IM1=$I1; IM0=$I0
+                 msg2 "3a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
+                 LISTIM[${#LISTIM[@]}]=${LISTIP[$CNT]}
+                 msg2 "Lista IP z podsieci:" ${LISTIM[@]}  # rem
+                 IM3=$I3; IM2=$I2; IM1=$I1; IM0=$I0 # Pozostałe sieci przeszukuje od 
+						    # od ostatniego wolnego IP
                  I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};
-#                 CNT2=$[CNT2+1]; CNT=0
-                 echo "3b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+                 msg2 "3b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}  # rem
                fi
                if [[ "$NET" -eq "2" ]] ; then
-                 echo "2a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+                 msg2 "2a$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} # rem
                  I3=${BROADCAST1[3]}; I2=${BROADCAST1[2]}; I1=${BROADCAST1[1]}; I0=${BROADCAST1[0]};
-#                 CNT2=$[CNT2+1]; CNT=0
-                 echo "2b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]}
+                 msg2 "2b$NET" "$I0.$I1.$I2.$I3/$M1" ${LISTIP[$CNT]} # rem
                fi
             done
           done
@@ -312,7 +347,66 @@ freeip() {
       done
     done
   done
-  return
+
+
+  #echo ========================================================================= #rem
+  # ----- Wyszukanie pierwszego wolnego IP w zadanej podsieci
+  # ---------------------------------------------------------
+  I3=$[NET1[3]+1]; I2=${NET1[2]}; I1=${NET1[1]}; I0=${NET1[0]} # Pierwszy adres sieci
+  B3=$[BROADCAST1[3]-1]; B2=${BROADCAST1[2]}; B1=${BROADCAST1[1]}; B0=${BROADCAST1[0]}
+  CNTMAX=${#LISTIM[@]}; CNT2MAX=${#LISTIM[@]}
+
+  for (( CNT2=0; CNT2<$CNT2MAX; CNT2++ )) ; do
+    msg2 " ====  Lista adresow IP używanych w danej podsieci  ====" # rem
+  #  msg2 "${LISTIM[@]}" # rem
+    echo "%%%%%%%%%%${LISTIM[@]}%%%%%%%%%%" # rem
+    msg2 " =========================================================================" # rem
+    S=0  			# Status zmieni się jeżeli znajdzie się wolny 
+         			# adres IP zakończy się zewnętrzna pętla CNT2
+    for (( CNT=0; CNT<$CNTMAX; CNT++ )) ; do
+      msg2 "Cykl: $CNT2" # rem
+      msg2 "====  IP  ${LISTIM[$CNT]}  ====" # rem
+      comparenet "$I0.$I1.$I2.$I3/$M1" ${LISTIM[$CNT]} "0"
+      if [[ "$NET" -eq "0" ]] ; then
+        S=1
+        msg2 "====  Zgodne IP - $I0.$I1.$I2.$I3/$M1 - przesunieice na koniec listy" # rem
+        # Zamiana pozycji miejscami - skraca czas wyszukiwania
+        CNTMAX2=$[CNTMAX-1]
+        TMP=${LISTIM[$CNT]}; LISTIM[$CNT]=${LISTIM[$CNTMAX2]}; LISTIM[$CNTMAX2]=$TMP   
+        CNTMAX=$[CNTMAX-1]      # Nie przeszukuje powtornie znalezionego zgodnego adresu
+        if [[ "$I3" -lt "$B3" ]] ; then
+          I3=$[I3+1]              
+        else
+          I3=$[NET1[3]+1]
+          if [[ "$I2" -lt "$B2" ]] ; then
+            I2=$[I2+1]
+          else
+            I2=$[NET1[2]+1]
+            if [[ "$I1" -lt "$B1" ]] ; then
+              I1=$[I1+1]
+            else
+              I1=$[NET1[1]+1]
+              if [[ "$I0" -lt "$B0" ]] ; then
+                I0=$[I0+1]
+              else
+                die 28 "======== BRAK WOLNEGO ADRESU IP W PODANEJ SIECI ======="
+              fi
+            fi
+          fi 
+        fi
+          msg2 "====  Nastepne IP do sprawdzenia: $I0.$I1.$I2.$I3/$M1" # rem
+      fi
+    done
+    if [[ "$S" -eq "0" ]] ; then
+      CNT2=CNT2MAX
+    fi
+  done
+
+  msg2 " -----------------------------------" # rem
+  msg2 " WOLNY ADRES IP:  $I0.$I1.$I2.$I3/$M1" # rem
+  msg2 " -----------------------------------" # rem
+  
+ return 0
 }
 
 
@@ -371,28 +465,6 @@ fi
 return 0
 }
 
-# Komunikaty błędów
-# -----------------
-msg () {				# Komunikaty wyswietlane przy ustawionej opcji  -v
-  if [[ ${CFG[17]} ]] ; then
-    echo $1$2$3
-  fi
-}
-
-
-err () {
-#  if [[ ${CFG[17]} ]] ; then
-    echo "$@" >&2
-#  fi
-}
-die () {
-  status="$1"
-  shift
-  err "$@"
-  exit "$status"
-}
-
-
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
 # ---------------------------------------------------------------------------------------------
@@ -401,8 +473,8 @@ die () {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16    | 17 | 18 | 19 | 20 | 21 |
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -update -v   -sw1 -sw2 -r1  -r2 )
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20    | 21 | 22 |
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -update -v   -V )
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
 CNT=0
@@ -423,6 +495,9 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         CFG[$CNT2]=0
       fi
       if [ ${PARAM[$CNT]} = "-v" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
+        CFG[$CNT2]=0
+      fi
+      if [ ${PARAM[$CNT]} = "-V" ] ; then		# Zapis dotyczacy wyswietlen komunikatow debugowania
         CFG[$CNT2]=0
       fi
       if [ ${PARAM[$CNT]} = "-L" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
@@ -512,13 +587,13 @@ if [[ -n ${CFG[5]} ]] ; then
   let KOD=$KOD+32  ; fi
 if [[ -n ${CFG[6]} ]] ; then
   let KOD=$KOD+16  ; fi
-if [[ -n ${CFG[18]} ]] ; then
+if [[ -n ${CFG[16]} ]] ; then
   let KOD=$KOD+8   ; fi
-if [[ -n ${CFG[19]} ]] ; then
+if [[ -n ${CFG[17]} ]] ; then
   let KOD=$KOD+4   ; fi
-if [[ -n ${CFG[20]} ]] ; then
+if [[ -n ${CFG[18]} ]] ; then
   let KOD=$KOD+2   ; fi
-if [[ -n ${CFG[21]} ]] ; then
+if [[ -n ${CFG[19]} ]] ; then
   let KOD=$KOD+1   ; fi
 #echo ---- $KOD ----
 
@@ -532,7 +607,7 @@ case "$KOD" in
       checkip ${CFG[5]} ${CFG[2]}
       checkip ${CFG[6]} ${CFG[2]}
       freeip ${CFG[5]}
-#      freeip ${CFG[6]}
+      freeip ${CFG[6]}
     else
       exit 0
     fi
