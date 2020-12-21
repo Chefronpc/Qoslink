@@ -187,27 +187,27 @@ comparenet() {
       if [[ "${IP1[0]}" -eq "${IP2[0]}" ]] && [[ "${IP1[1]}" -eq "${IP2[1]}" ]] && [[ "${IP1[2]}" -eq "${IP2[2]}" ]] && [[ "${IP1[3]}" -eq "${IP2[3]}" ]] ; then		
         NET=0		# Konflikt adresów IP
         if [[ "$3" -eq "1" ]] ; then 
-          msg2 "Konflikt adresów IP:  $1"
+          msg "Konflikt adresów IP:  $1"
         fi
         return 
       else
         NET=3		# Podsieci zgodne, IP bez konfliktu
         if [[ "$3" -eq "1" ]] ; then 
-          msg2 "Adresy sieci zgodne -ip1:$1  -ip2:$2, IP bez konfliktu"
+          msg "Adresy sieci zgodne -ip1:$1  -ip2:$2, IP bez konfliktu"
         fi
         return
       fi
     else
       NET=2  		# Różne podsieci 
       if [[ "$3" -eq "1" ]] ; then 
-        msg2 "Adresy sieci $1 $2 niezgodne"
+        msg "Adresy sieci $1 $2 niezgodne"
       fi
       return
     fi
   else
     NET=1			# Różne długości maski
     if [[ "$3" -eq "1" ]] ; then 
-      msg2 "Różne długości adresu sieci (maski) $1 $2"
+      msg "Różne długości adresu sieci (maski) $1 $2"
     fi
     return
   fi
@@ -557,14 +557,15 @@ crt_c() {
 }
 
 
-
-# -----  Utworzenie linka bridga z kontenerem
-# ---------------------------------
-# bridge - kontener
+# -----  Utworzenie połączenia pomiędzy  bridgem a kontenerem
+# $1 - bridge
+# $2 - interface
+# $3 - host
+# $4 - adres IP
 crt_link() {
   pipework $1 -i $2 $3 $4
   #pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
-  msg "Polaczenie bridg'a -br1 <${CFG[7]}> z hostem <${CFG[1]}>"
+  msg "Polaczenie bridg'a -br1 $1 z hostem $3"
 }
 
 
@@ -727,12 +728,18 @@ case "$KOD" in
       set_c
       set_br1
       set_br2
+      crt_c
       set_if1
+      crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
       set_if2
+      crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
       set_if3
+      crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
       set_if4
+      crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
 
     else
+      
       exit 0
     fi
     ;;
@@ -744,9 +751,9 @@ esac
 
 # Podgląd tablicy z parametrami
 # ---------------------
-for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-done
+#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+#done
 
 echo Koniec
 exit 0
