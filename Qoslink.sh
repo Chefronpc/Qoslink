@@ -14,7 +14,7 @@ IFMAX=32
 NETDEFAULT="10.1.1.0/24" # Domyślny adres sieci. Obsluga 254 sieci.
 
 
-# Komunikaty komentarzy i błędów
+# Komentarze i błędy
 # ------------------------------
 msg () {			# Komentarze wyswietlane przy ustawionej opcji  -v
   if [[ ${CFG[21]} ]] ; then
@@ -568,12 +568,35 @@ crt_link() {
   msg "Polaczenie bridg'a -br1 $1 z hostem $3"
 }
 
+# ----  Utworzenie bridga br0 wewnątrz kontenera <qoslinkxx>
+# ----  umożliwia przekazywanie pakietów poprzez kontener <qoslinkxx>
+# ----  z zachowaniem zadanych parametrów transmisji
+# $1 - nazwa kontenera
+# $2 - nazwa interfejsu -if3
+# $3 - nazwa interfejsu -if4
+# $4 - adres IP - ip1  dla bridga br0
+crt_brinqos() {
+msg "Utworzenie bridga br0 w kontenerze $1 mostkujący intefejsy $2 oraz $3"
+ANS=(`docker exec $1 ip addr flush dev $2`)
+ANS=(`docker exec $1 ip addr flush dev $3`)
+ANS=(`docker exec $1 ip link set dev $2 up`)
+ANS=(`docker exec $1 ip link set dev $3 up`)
+ANS=(`docker exec $1 brctl addbr br0`)
+ANS=(`docker exec $1 brctl addif br0 $2`)
+ANS=(`docker exec $1 brctl addif br0 $3`)
+ANS=(`docker exec $1 ip addr add $4 dev br0`)
+ANS=(`docker exec $1 ip link set dev br0 up`)
+}
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
 # ---------------------------------------------------------------------------------------------
-#     QoSLink - skrypt symulujący sieć składającą się z łączy, switchy oraz routerów 
-#               wraz ustalaniem parametrów QoS poszczególnych łączy.
+#   QoSLink - skrypt symulujący sieć składającą się z łączy, switchy oraz routerów 
+#             wraz z ustalaniem parametrów transmisji <przepustowości, opóźnienia,
+#             gubienia oraz duplikowania pakietów niezależnie dla poszczególnych łączy.
+#             Działanie skryptu oparte jest na technologii kontenerów Docker, 
+#             routingu opartego na oprogramowaniu Quagga,Traffic Control (TC), module NetEM,
+#             skrypcie pipework autorstwa ............... udostępnionego na licencji ......
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
@@ -737,7 +760,7 @@ case "$KOD" in
       crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
       set_if4
       crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
-
+      crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
     else
       
       exit 0
