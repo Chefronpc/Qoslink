@@ -10,21 +10,21 @@ BRMAX=512		# tworzonych w tych kontenerach.
 QOSPREFIX="qoslink"
 QOSMAX=256
 IFPREFIX="eth"
-IFMAX=32
-NETDEFAULT="10.1.1.0/24" # Domyślny adres sieci. Obsluga 254 sieci.
+IFMAX=64
+DEFAULTNET="10.10.10.0/26" # Domyślny adres sieci. Obsluga 254 sieci.
 
 
 # Komentarze i błędy
 # ------------------------------
-msg () {			# Komentarze wyswietlane przy ustawionej opcji  -v
+msg () {                        # Komentarze wyswietlane przy ustawionej opcji  -v
   if [[ ${CFG[21]} ]] ; then
-    echo $1$2$3
+    echo $1$2$3$4$5$6$7$8$9
   fi
 }
 
-msg2 () {			# Komunikaty debugowania wyswietlane przy ustawionej opcji  -V
+msg2 () {                       # Komunikaty debugowania wyswietlane przy ustawionej opcji  -V
   if [[ ${CFG[22]} ]] ; then
-    echo $1$2$3
+    echo $1$2$3$4$5$6$7$8$9
   fi
 }
 
@@ -42,8 +42,8 @@ die () {
 
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
-          
-# Sprawdza dostępność bridga 
+
+# Sprawdza dostępność bridga
 # We - $1 nazwa bridga
 # --------------------------
 checkbridge() {
@@ -316,7 +316,7 @@ checkipall() {
         esac
       done
     done
-    msg "Brak konfliku adresu dla adresu $1"
+    msg "Brak konfliku dla adresu $1"
     return
   elseif
     die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
@@ -420,8 +420,8 @@ freeip() {
 
   for (( CNT2=0; CNT2<$CNT2MAX; CNT2++ )) ; do
     msg2 " ====  Lista adresow IP używanych w danej podsieci  ====" # rem
-    if [[ ${CFG[22]} ]] ; then
-      echo "${LISTIM[@]}" # rem
+    if [[ "${CFG[22]}" -eq "0" ]] ; then
+      msg2 "${LISTIM[@]}" # rem
     fi
     msg2 " =========================================================================" # rem
     S=0  			# Status zmieni się jeżeli znajdzie się wolny 
@@ -457,8 +457,9 @@ freeip() {
             fi
           fi 
         fi
-          msg2 "====  Nastepne IP do sprawdzenia: $I0.$I1.$I2.$I3/$M1" # rem
+        msg2 "====  Nastepne IP do sprawdzenia: $I0.$I1.$I2.$I3/$M1" # rem
       fi
+      
     done
     if [[ "$S" -eq "0" ]] ; then
       CNT2=CNT2MAX
@@ -471,6 +472,169 @@ freeip() {
   msg "Rezerwacja adresu IP: $NEWIP"
  return 0
 }
+
+
+# Zwraca adres nowej podsieci uwzgledniajac konfiguracje IP wszystkich kontenerow
+# -------------------------------------------------------------------------------
+freenet() {
+  comparenet $DEFAULTNET "0.0.0.0"
+  msg "Wyszukiwanie wolnego adresu sieci. Domyślny: ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  msg2 ${M1[@]}  # rem
+  msg2 ${IP1[@]}  # rem
+  msg2 ${MASK1[@]}  # rem
+  msg2 ${NET1[@]}  # rem
+  msg2 ${BROADCAST1[@]}  # rem
+  NEGM[3]=$[256-${MASK1[3]}]			
+  NEGM[2]=$[256-${MASK1[2]}]
+  NEGM[1]=$[256-${MASK1[1]}]
+  NEGM[0]=$[256-${MASK1[0]}]
+  CNTIP=$[NEGM[3]*NEGM[2]*NEGM[1]*NEGM[0]-2]		# obliczanie całkowitej ilości adresów IP w danej sieci
+
+  NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
+
+# ----- Wyszukiwanie w kontenerach adresow sieci o masce zgodnej z domyślnym adresem sieci
+# ----------------------------------------------------------------------------------------
+
+  LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
+    msg2 "="  # rem
+    msg2 "=============  kontener  ${LISTCONTAINER[$CNT2]}  ===================" # rem
+    LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+    let LISTIPMAX=${#LISTIP[@]}
+    for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
+      msg2 "="  # rem
+      msg2 "-----  IP   ${LISTIP[$CNT]}  -----"  # rem
+      M2=(`echo ${LISTIP[$CNT]} | awk -F/ '{print $2}' `)
+      if [[ "$M1" -eq "$M2" ]] ; then
+        LISTIM[${#LISTIM[@]}]=${LISTIP[$CNT]}
+      fi
+    done
+    if [[ ${CFG[22]} == "0" ]] ; then
+      echo "LISTA: ${LISTIM[@]}"
+    fi
+  done
+
+  # ----- Wyszukanie pierwszej wolnej sieci z domyślnego zekresu
+  # ------------------------------------------------------------
+  CNTMAX=${#LISTIM[@]}; CNT2MAX=${#LISTIM[@]}
+
+  S2=1
+ # for (( CNT2=0; CNT2<$CNT2MAX; CNT2++ )) ; do
+  while [ $S2 -eq 1 ] ; do
+
+    S=0  			# Status zmieni się jeżeli znajdzie się wolny 
+         			# adres IP zakończy się zewnętrzna pętla CNT2
+
+    for (( CNT=0; CNT<$CNTMAX; CNT++ )) ; do
+      msg2 "Cykl: $CNT2 of $CNT2MAX : poz: $CNT of $CNTMAX" # rem
+      msg2 "====  IP  ${LISTIM[$CNT]}  ====" # rem
+      comparenet "${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1" ${LISTIM[$CNT]} "0"
+      msg2 ${M1[@]}  # rem
+      msg2 ${IP1[@]}  # rem
+      msg2 ${MASK1[@]}  # rem
+      msg2 ${NET1[@]}  # rem
+      msg2 ${BROADCAST1[@]}  # rem
+      if [[ "$NET" -eq "0" ]] || [[ "$NET" -eq "3" ]] ; then
+        S=1     # Wymusza kolejne sprawdzenie listy dla kolejnej sieci
+        msg2 "====  Zgodny adres sieci - ${NET1[@]}/$M1 - usunięcie z listy" # rem
+        # Usunięcie pozycji skraca czas wyszukiwania
+        CNT2MAX=$[CNT2MAX-1]
+        
+        LISTIM[$CNT]=${LISTIM[$CNT2MAX]}; LISTIM[$CNT2MAX]=""
+
+        if [[ "${CFG[22]}" == "0" ]] ; then 
+          echo "===  $CNT2 of $CNT2MAX : $CNT of $CNTMAX : ${LISTIM[$CNT2MAX]} " # rem
+          echo "${LISTIM[@]} " # rem
+        fi
+        CNTMAX=$[CNTMAX-1]      # Nie przeszukuje powtornie znalezionego zgodnego adresu
+        CNT=$[CNT-1]            # Powtórnie przeszukuje ostatnią pozycje z nowo wstawionym elementem
+      fi
+ 
+
+    done
+
+    if [[ "$S" == "0" ]] ; then  # Znacznik określający czy aktualny ustalony adres sieci
+         			  # ( NETM[@] jest wolny. Gdy S=0, pętla while kończy działanie.
+				  # Gdy S=1, ustala kolejny adres sieci zgodnie z maską.
+#      CNT2=$CNT2MAX
+       S2=0
+    else
+    # ----- Ustalenieadresu kolejnej sieci z zadaną długością maski
+      if [[ "${MASK1[3]}" -ne "0" ]] ; then
+        if [[ "$[NETM[3]+NEGM[3]]" -lt "256" ]] ; then
+          NETM[3]=$[NETM[3]+NEGM[3]]
+        else
+          NETM[3]=0
+          if [[ "$[NETM[2]+NEGM[2]]" -lt "256" ]] ; then
+            NETM[2]=$[NETM[2]+NEGM[2]]
+          else
+            NETM[2]=0
+            if [[ "$[NETM[1]+NEGM[1]]" -lt "256" ]] ; then
+              NETM[1]=$[NETM[1]+NEGM[1]]
+            else
+              NETM[1]=0
+              if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
+                NETM[0]=$[NETM[0]+NEGM[0]]
+              else
+                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+              fi
+            fi
+          fi     
+        fi
+      else
+        if [[ "${MASK1[2]}" -ne "0" ]] ; then
+          if [[ "$[NETM[2]+NEGM[2]]" -lt "256" ]] ; then
+            NETM[2]=$[NETM[2]+NEGM[2]]
+          else
+            NETM[2]=0
+            if [[ "$[NETM[1]+NEGM[1]]" -lt "256" ]] ; then
+              NETM[1]=$[NETM[1]+NEGM[1]]
+            else
+              NETM[1]=0
+              if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
+                 NETM[0]=$[NETM[0]+NEGM[0]]
+               else
+                 die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+              fi
+            fi
+          fi
+        else
+          if [[ "${MASK1[1]}" -ne "0" ]] ; then
+            if [[ "$[NETM[1]+NEGM[1]]" -lt "256" ]] ; then
+              NETM[1]=$[NETM[1]+NEGM[1]]
+            else
+              NETM[1]=0
+              if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
+                NETM[0]=$[NETM[0]+NEGM[0]]
+              else
+                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+              fi
+            fi
+          else
+            if [[ "${MASK1[0]}" -ne "0" ]] ; then
+              if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
+                NETM[0]=$[NETM[0]+NEGM[0]]
+              else
+                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+              fi
+            fi
+          fi
+        fi
+      fi
+    fi
+    msg2 "====  Nastepna sieć do sprawdzenia: ${NETM[@]}/$M1" # rem
+  done
+
+  NEWNET="${NETM[@]}/$M1"
+  NEWIP="${NETM[0]}.${NETM[1]}.${NETM[2]}.$[NETM[3]+1]/$M1"
+  msg2 " -----------------------------------" # rem
+  msg2 " Wolny adres sieci IP: $NEWNET"
+  msg2 " -----------------------------------" # rem
+  msg "Rezerwacja adresu sieci: $NEWNET"
+ return 0
+}
+
+
 
 
 # ---- Przypisanie nazwy dla kontenera <c>
@@ -591,7 +755,7 @@ ANS=(`docker exec $1 ip link set dev br0 up`)
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
 # ---------------------------------------------------------------------------------------------
-#   QoSLink - skrypt symulujący sieć składającą się z łączy, switchy oraz routerów 
+#   QoSLink - skrypt symulujący sieć IP składającą się z łączy, switchy oraz routerów 
 #             wraz z ustalaniem parametrów transmisji <przepustowości, opóźnienia,
 #             gubienia oraz duplikowania pakietów niezależnie dla poszczególnych łączy.
 #             Działanie skryptu oparte jest na technologii kontenerów Docker, 
@@ -739,6 +903,53 @@ if [[ -n ${CFG[19]} ]] ; then
 
 case "$KOD" in
 
+224)						# h1 + ip1  ---  h2 
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_if1
+    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    set_if2
+    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    set_if3
+    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    set_if4
+    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
+    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    ;;
+
+208)						# h1        ---  h2 + ip2  
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_if1
+    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    set_if2
+    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    set_if3
+    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    set_if4
+    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
+    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    ;;
+
+
 240)						# h1 + ip1  ---  h2 + ip2  
     comparenet "${CFG[5]}" "${CFG[6]}" "1"
     if [[ "$NET" -eq "3" ]] ; then
@@ -761,12 +972,35 @@ case "$KOD" in
       set_if4
       crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
       crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
-    else
-      
+    else     
       exit 0
     fi
     ;;
 
+192)
+    freenet
+    freeip $NEWIP
+    CFG[5]=$NEWIP
+    freeip $NEWIP
+    CFG[6]=$NEWIP
+    freeip $NEWIP
+    CFG[23]=$NEWIP
+    freeip $NEWIP
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_if1
+    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    set_if2
+    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    set_if3
+    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    set_if4
+    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
+    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    ;;
 *)
     echo "Nieprawidłowe zestawienie parametrów."
     exit 0 ;;  
