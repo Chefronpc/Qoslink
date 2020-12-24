@@ -3,12 +3,14 @@ set -e
 
 #  set +x
 
-# Zmienne Globalne
+# Parametry wstępne -  Globalne
 # ----------------
 BRPREFIX="brlink"	# Domyślne nazwy bridgy, linków oraz interfejsów
 BRMAX=512		# tworzonych w tych kontenerach.
 QOSPREFIX="qoslink"
 QOSMAX=256
+QUAGGAPREFIX="quaggalink"
+QUAGGAMAX=256
 IFPREFIX="eth"
 IFMAX=64
 DEFAULTNET="10.10.10.0/26" # Domyślny adres sieci. Obsluga 254 sieci.
@@ -111,6 +113,38 @@ freecontainer() {
   die 5 "Brak wolnych kontenerów"
 }
  
+# Sprawdza dostępność routera Quagga
+# We - $1 nazwa kontenera
+# --------------------------
+checkrouter() {
+  LISTROUTER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<${#LISTROUTER[@]}; CNT++ )) ; do
+    if [[ "$1" = "${LISTROUTER[$CNT]}" ]] ; then
+      return 0
+    fi
+  done
+  return 1
+}
+ 
+# Zwraca numer pierwszego wolnego routera
+# Wy - nazwa kontenera
+# --------------------------------
+freerouter() {
+  LISTROUTER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<$QUAGGAMAX; CNT++ )) ; do
+    PASS=0 
+    ANS=(`echo ${LISTROUTER[@]} | grep $QUAGGAPREFIX$CNT `)
+    if [[ -n ${ANS[@]} ]] ; then
+      PASS=1
+    fi
+    if [[ $PASS -eq 0 ]] ; then
+      QUAGGANAME=$QUAGGAPREFIX$CNT 		# Wyszukana wolna nazwa dla nowego routera (kontenera)
+      return 0
+    fi
+  done
+  die 5 "Brak wolnych routerów"
+}
+ 
 # Sprawdza dostępność interfejsów w kontenerze
 # We - $1 nazwa interfejsu w kontenerze $2
 # We - $2 nazwa kontenera
@@ -181,7 +215,6 @@ comparenet() {
   NET1=(` ipcalc $1 -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   BROADCAST1=(` ipcalc $1 -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   BROADCAST2=(` ipcalc $1 -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
-
   if [[ "$M1" -eq "$M2" ]] ; then
     if [[ "$[ ${IP1[0]} & ${MASK1[0]} ]" -eq "$[ ${IP2[0]} & ${MASK2[0]} ]" ]] && [[ "$[ ${IP1[1]} & ${MASK1[1]} ]" -eq "$[ ${IP2[1]} & ${MASK2[1]} ]" ]] && [[ "$[ ${IP1[2]} & ${MASK1[2]} ]" -eq "$[ ${IP2[2]} & ${MASK2[2]} ]" ]] && [[ "$[ ${IP1[3]} & ${MASK1[3]} ]" -eq "$[ ${IP2[3]} & ${MASK2[3]} ]" ]] ; then 
       if [[ "${IP1[0]}" -eq "${IP2[0]}" ]] && [[ "${IP1[1]}" -eq "${IP2[1]}" ]] && [[ "${IP1[2]}" -eq "${IP2[2]}" ]] && [[ "${IP1[3]}" -eq "${IP2[3]}" ]] ; then		
@@ -625,8 +658,7 @@ freenet() {
     msg2 "====  Nastepna sieć do sprawdzenia: ${NETM[@]}/$M1" # rem
   done
 
-  NEWNET="${NETM[@]}/$M1"
-  NEWIP="${NETM[0]}.${NETM[1]}.${NETM[2]}.$[NETM[3]+1]/$M1"
+  NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
   msg2 " -----------------------------------" # rem
   msg2 " Wolny adres sieci IP: $NEWNET"
   msg2 " -----------------------------------" # rem
@@ -636,13 +668,34 @@ freenet() {
 
 
 
-
 # ---- Przypisanie nazwy dla kontenera <c>
 set_c() {
 if [[ -z ${CFG[0]} ]] ; then
   if freecontainer ; then 
     CFG[0]=$QOSNAME
     msg "Przypisano nazwę kontenera -c: <${CFG[0]}>"
+  fi
+fi
+return 0
+}
+
+# ---- Przypisanie nazwy dla routera Quagga <r1>
+set_r1() {
+if [[ "${CFG[18]}" == "setnamecntquagga" ]] ; then
+  if freerouter ; then 
+    CFG[18]=$QUAGGANAME
+    msg "Przypisano nazwę routera w kontenerze -r1: <${CFG[18]}>"
+  fi
+fi
+return 0
+}
+
+# ---- Przypisanie nazwy dla routera Quagga <r2>
+set_r2() {
+if [[ "${CFG[19]}" == "setnamecntquagga" ]] ; then
+  if freerouter ; then 
+    CFG[19]=$QUAGGANAME
+    msg "Przypisano nazwę routera w kontenerze -r2: <${CFG[19]}>"
   fi
 fi
 return 0
@@ -681,12 +734,34 @@ fi
 return 0
 }
 
-# -----  Przypisanie nazwy dla interfejsu <if2> w hoscie  <-h2>  -------
+# -----  Przypisanie nazwy dla interfejsu <if2> w hoscie <-h2>  -------
 set_if2() {
 if [[ -z ${CFG[4]} ]] ; then
   if freeinterface "${CFG[2]}" ; then
     CFG[4]=$IFNAME
     msg "Przypisano nazwę interfejsu -if2: <${CFG[4]}> w kontenerze <${CFG[2]}>"
+  fi
+fi
+return 0
+}
+
+# -----  Przypisanie nazwy dla interfejsu <if1> w routerze <-r1>  -------
+set_if1r1() {
+if [[ -z ${CFG[3]} ]] ; then
+  if freeinterface "${CFG[18]}" ; then
+    CFG[3]=$IFNAME
+    msg "Przypisano nazwę interfejsu -if1: <${CFG[3]}> w kontenerze <${CFG[18]}>"
+  fi
+fi
+return 0
+}
+
+# -----  Przypisanie nazwy dla interfejsu <if2> w routerze <-r2>  -------
+set_if2r2() {
+if [[ -z ${CFG[4]} ]] ; then
+  if freeinterface "${CFG[19]}" ; then
+    CFG[4]=$IFNAME
+    msg "Przypisano nazwę interfejsu -if2: <${CFG[4]}> w kontenerze <${CFG[19]}>"
   fi
 fi
 return 0
@@ -717,39 +792,69 @@ return 0
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
   docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add NET_ADMIN host:v1 /bin/bash
-  msg "Uruchomienie kontenera linka ${CFG[0]}"
+  msg "Uruchomienie kontenera łączącego ${CFG[0]}"
+}
+
+# -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
+crt_r1() {
+  docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add NET_ADMIN host:v1 /bin/bash
+  msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
+}
+
+# -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
+crt_r2() {
+  docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add NET_ADMIN host:v1 /bin/bash
+  msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
 }
 
 
-# -----  Utworzenie połączenia pomiędzy  bridgem a kontenerem
-# $1 - bridge
-# $2 - interface
-# $3 - host
-# $4 - adres IP
-crt_link() {
-  pipework $1 -i $2 $3 $4
-  #pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
-  msg "Polaczenie bridg'a -br1 $1 z hostem $3"
+
+# -----  Tworzenie połączen pomiędzy bridgem a kontenerem
+crt_linkif1() {
+  pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
 }
+
+crt_linkif2() {
+  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
+  msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]}"
+}
+
+crt_linkif3() {
+  pipework ${CFG[7]} -i ${CFG[25]} ${CFG[0]} ${CFG[23]}
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[0]}"
+}
+
+crt_linkif4() {
+  pipework ${CFG[8]} -i ${CFG[26]} ${CFG[0]} ${CFG[24]}
+  msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[0]}"
+}
+
+crt_linkif1r1() {
+  pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[18]}"
+}
+
+crt_linkif2r2() {
+  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
+  msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[19]}"
+}
+
 
 # ----  Utworzenie bridga br0 wewnątrz kontenera <qoslinkxx>
 # ----  umożliwia przekazywanie pakietów poprzez kontener <qoslinkxx>
 # ----  z zachowaniem zadanych parametrów transmisji
-# $1 - nazwa kontenera
-# $2 - nazwa interfejsu -if3
-# $3 - nazwa interfejsu -if4
-# $4 - adres IP - ip1  dla bridga br0
 crt_brinqos() {
-msg "Utworzenie bridga br0 w kontenerze $1 mostkujący intefejsy $2 oraz $3"
-ANS=(`docker exec $1 ip addr flush dev $2`)
-ANS=(`docker exec $1 ip addr flush dev $3`)
-ANS=(`docker exec $1 ip link set dev $2 up`)
-ANS=(`docker exec $1 ip link set dev $3 up`)
-ANS=(`docker exec $1 brctl addbr br0`)
-ANS=(`docker exec $1 brctl addif br0 $2`)
-ANS=(`docker exec $1 brctl addif br0 $3`)
-ANS=(`docker exec $1 ip addr add $4 dev br0`)
-ANS=(`docker exec $1 ip link set dev br0 up`)
+msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący intefejsy ${CFG[25]} oraz ${CFG[26]}"
+ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
+ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
+ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
+ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
+ANS=(`docker exec ${CFG[0]} brctl addbr br0`)
+ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[25]}`)
+ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[26]}`)
+ANS=(`docker exec ${CFG[0]} ip addr add ${CFG[23]} dev br0`)
+ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 }
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
@@ -764,8 +869,8 @@ ANS=(`docker exec $1 ip link set dev br0 up`)
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20    | 21 | 22 | 23 | 24 | 25 | 26 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -update -v   -V   -ip3 -ip4 -if3 -if4 )
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20    | 21 | 22 | 23 | 24 | 25 | 26 | 27)
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -update -v   -V   -ip3 -ip4 -if3 -if4 -r)
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
 CNT=0
@@ -782,7 +887,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
     if [ ${PARAM[$CNT]} = ${WSK[$CNT2]} ] ; then
       CFG[$CNT2]=${PARAM[$CNT+1]}
-      if [ ${PARAM[$CNT]} = "-update" ] ; then		# Zapis dotyczącej aktualizacji danych 
+      if [ ${PARAM[$CNT]} = "-update" ] ; then		# Zapis dotyczący  aktualizacji danych 
         CFG[$CNT2]=0
       fi
       if [ ${PARAM[$CNT]} = "-v" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
@@ -791,14 +896,27 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
       if [ ${PARAM[$CNT]} = "-V" ] ; then		# Zapis dotyczacy wyswietlen komunikatow debugowania
         CFG[$CNT2]=0
       fi
-      if [ ${PARAM[$CNT]} = "-L" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
-        CFG[$CNT2]=0
+      if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Zapis dotyczacy automatycznego nazwania routera
+        TMP=${CFG[$CNT2]}
+        TMP=(`echo ${TMP:0:1}`)
+        if [[ -n ${CFG[$CNT2]} ]] ; then
+          if [[ "$TMP" = "-" ]] ; then
+            CFG[$CNT2]="setnamecntquagga"
+          fi
+        else
+          CFG[$CNT2]="setnamecntquagga"
+        fi
       fi
-      if [ ${PARAM[$CNT]} = "-S" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
-        CFG[$CNT2]=0
-      fi
-      if [ ${PARAM[$CNT]} = "-R" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
-        CFG[$CNT2]=0
+      if [ ${PARAM[$CNT]} = "-r2" ] ; then		# Zapis dotyczacy automatycznego nazwania routera
+        TMP=${CFG[$CNT2]}
+        TMP=(`echo ${TMP:0:1}`)
+        if [[ -n ${CFG[$CNT2]} ]] ; then
+          if [[ "$TMP" = "-" ]] ; then
+            CFG[$CNT2]="setnamecntquagga"
+          fi
+        else
+          CFG[$CNT2]="setnamecntquagga"
+        fi
       fi
     fi
   done
@@ -903,6 +1021,60 @@ if [[ -n ${CFG[19]} ]] ; then
 
 case "$KOD" in
 
+66)						#       h2  ---  r1
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_r1
+    set_br1
+    set_br2
+    crt_c
+    crt_r1
+    set_if1r1
+    crt_linkif1r1
+    set_if2
+    crt_linkif2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    ;;
+
+129)						# h1        ---       r2
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_r2
+    set_br1
+    set_br2
+    crt_c
+    crt_r2
+    set_if1
+    crt_linkif1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    ;;
+
 224)						# h1 + ip1  ---  h2 
     checkipall ${CFG[5]}
     freeip ${CFG[5]}
@@ -916,15 +1088,41 @@ case "$KOD" in
     set_br2
     crt_c
     set_if1
-    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    crt_linkif1
     set_if2
-    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    crt_linkif2
     set_if3
-    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    crt_linkif3
     set_if4
-    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
-    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    crt_linkif4
+    crt_brinqos
     ;;
+
+161)						# h1 + ip1  ---         r2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_r2
+    set_br1
+    set_br2
+    crt_c
+    crt_r2
+    set_if1
+    crt_linkif1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    ;;
+
 
 208)						# h1        ---  h2 + ip2  
     checkipall ${CFG[6]}
@@ -939,16 +1137,40 @@ case "$KOD" in
     set_br2
     crt_c
     set_if1
-    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    crt_linkif1
     set_if2
-    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    crt_linkif2
     set_if3
-    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    crt_linkif3
     set_if4
-    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
-    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    crt_linkif4
+    crt_brinqos
     ;;
 
+82)						# h1 + ip1  ---         r2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_r1
+    set_br1
+    set_br2
+    crt_c
+    crt_r1
+    set_if1r1
+    crt_linkif1r1
+    set_if2
+    crt_linkif2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    ;;
 
 240)						# h1 + ip1  ---  h2 + ip2  
     comparenet "${CFG[5]}" "${CFG[6]}" "1"
@@ -964,14 +1186,45 @@ case "$KOD" in
       set_br2
       crt_c
       set_if1
-      crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+      crt_linkif1
       set_if2
-      crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+      crt_linkif2
       set_if3
-      crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+      crt_linkif3
       set_if4
-      crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
-      crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+      crt_linkif4
+      crt_brinqos
+    else     
+      exit 0
+    fi
+    ;;
+
+51)						# h1 + ip1  ---  h2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_r1
+      crt_r1
+      set_r2
+      crt_r2
+      set_if1r1
+      crt_linkif1r1
+      set_if2r2
+      crt_linkif2r2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
     else     
       exit 0
     fi
@@ -979,27 +1232,27 @@ case "$KOD" in
 
 192)
     freenet
-    freeip $NEWIP
+    freeip $NEWNET
     CFG[5]=$NEWIP
-    freeip $NEWIP
+    freeip $NEWNET
     CFG[6]=$NEWIP
-    freeip $NEWIP
+    freeip $NEWNET
     CFG[23]=$NEWIP
-    freeip $NEWIP
+    freeip $NEWNET
     CFG[24]=$NEWIP
     set_c
     set_br1
     set_br2
     crt_c
     set_if1
-    crt_link ${CFG[7]} ${CFG[3]} ${CFG[1]} ${CFG[5]}
+    crt_linkif1
     set_if2
-    crt_link ${CFG[8]} ${CFG[4]} ${CFG[2]} ${CFG[6]}
+    crt_linkif2
     set_if3
-    crt_link ${CFG[7]} ${CFG[25]} ${CFG[0]} ${CFG[23]}
+    crt_linkif3
     set_if4
-    crt_link ${CFG[8]} ${CFG[26]} ${CFG[0]} ${CFG[24]}
-    crt_brinqos ${CFG[0]} ${CFG[25]} ${CFG[26]} ${CFG[23]}
+    crt_linkif4
+    crt_brinqos
     ;;
 *)
     echo "Nieprawidłowe zestawienie parametrów."
