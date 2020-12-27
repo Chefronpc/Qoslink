@@ -791,7 +791,7 @@ return 0
 
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add NET_ADMIN host:v1 /bin/bash
+  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add NET_ADMIN qoslink:v1 /bin/bash
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
@@ -806,7 +806,6 @@ crt_r2() {
   docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add NET_ADMIN host:v1 /bin/bash
   msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
 }
-
 
 
 # -----  Tworzenie połączen pomiędzy bridgem a kontenerem
@@ -857,8 +856,30 @@ ANS=(`docker exec ${CFG[0]} ip addr add ${CFG[23]} dev br0`)
 ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 }
 
-# Weryfikacja wprowadzonych parametrów i ich zależności
-# -----------------------------------------------------
+set_link() {
+set -x
+msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
+#ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[25]}`)
+#ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[26]}`)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+set +x
+}
+
+del_container() {
+  if [[ "${CFG[27]}" = "deldefaultnamecnt" ]] ; then
+   : # :
+  fi
+}
+
+checklink() {
+: # :
+}
+
+
+
 # ---------------------------------------------------------------------------------------------
 #   QoSLink - skrypt symulujący sieć IP składającą się z łączy, switchy oraz routerów 
 #             wraz z ustalaniem parametrów transmisji <przepustowości, opóźnienia,
@@ -869,8 +890,8 @@ ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20    | 21 | 22 | 23 | 24 | 25 | 26 | 27)
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -update -v   -V   -ip3 -ip4 -if3 -if4 -r)
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2)
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
 CNT=0
@@ -887,18 +908,26 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
     if [ ${PARAM[$CNT]} = ${WSK[$CNT2]} ] ; then
       CFG[$CNT2]=${PARAM[$CNT+1]}
+
       if [ ${PARAM[$CNT]} = "-update" ] ; then		# Zapis dotyczący  aktualizacji danych 
         CFG[$CNT2]=0
       fi
+
       if [ ${PARAM[$CNT]} = "-v" ] ; then		# Zapis dotyczacy wyswietlen komunikatow
         CFG[$CNT2]=0
       fi
+
       if [ ${PARAM[$CNT]} = "-V" ] ; then		# Zapis dotyczacy wyswietlen komunikatow debugowania
         CFG[$CNT2]=0
       fi
+
+      if [ ${PARAM[$CNT]} = "-D" ] ; then		# Zapis dotyczacy usuwania kontenerów
+        CFG[$CNT2]=0
+      fi
+
+      TMP=${CFG[$CNT2]}
+      TMP=${TMP:0:1}
       if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Zapis dotyczacy automatycznego nazwania routera
-        TMP=${CFG[$CNT2]}
-        TMP=(`echo ${TMP:0:1}`)
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$TMP" = "-" ]] ; then
             CFG[$CNT2]="setnamecntquagga"
@@ -907,9 +936,8 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
           CFG[$CNT2]="setnamecntquagga"
         fi
       fi
+
       if [ ${PARAM[$CNT]} = "-r2" ] ; then		# Zapis dotyczacy automatycznego nazwania routera
-        TMP=${CFG[$CNT2]}
-        TMP=(`echo ${TMP:0:1}`)
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$TMP" = "-" ]] ; then
             CFG[$CNT2]="setnamecntquagga"
@@ -918,6 +946,17 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
           CFG[$CNT2]="setnamecntquagga"
         fi
       fi
+
+      if [ ${PARAM[$CNT]} = "-D" ] ; then		# Zapis dotyczacy automatycznego nazwania routera
+        if [[ -n ${CFG[$CNT2]} ]] ; then
+          if [[ "$TMP" = "-" ]] ; then
+            CFG[$CNT2]="deldefaultnamecnt"
+          fi
+        else
+          CFG[$CNT2]="deldefaultnamecnt"
+        fi
+      fi
+
     fi
   done
 done
@@ -953,26 +992,28 @@ if [[ -n ${CFG[8]} ]] ; then
   fi
 fi
 
-# -----  Weryfikacja interfejsow  -----
+# -----  Weryfikacja interfejsu  IF1  -----
 if [[ -n ${CFG[3]} ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[1]}" ; then
     die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
   fi
 fi
 
+# -----  Weryfikacja interfejsu  IF2  -----
 if [[ -n ${CFG[4]} ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[2]}" ; then
     die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
   fi
 fi
 
-# -----  Weryfikacja interfejsow  -----
+# -----  Weryfikacja interfejsu  IF3  -----
 if [[ -n ${CFG[25]} ]] ; then
   if checkinterface "${CFG[25]}" "${CFG[1]}" ; then
     die 5 "Nazwa interfejsu z opcji -if3 ${CFG[25]} jest już utworzona w kontenerze ${CFG[1]}"
   fi
 fi
 
+# -----  Weryfikacja interfejsu  IF4  -----
 if [[ -n ${CFG[26]} ]] ; then
   if checkinterface "${CFG[26]}" "${CFG[2]}" ; then
     die 5 "Nazwa interfejsu z opcji -if4 ${CFG[26]} jest już utworzona w kontenerze ${CFG[2]}"
@@ -981,21 +1022,80 @@ fi
 
 # ----  Weryfikacja poprawności IP1
 if [[ -n ${CFG[5]} ]] ; then
-  if parseip ${CFG[5]}  ; then
-    : # :
-  else
+  if ! parseip ${CFG[5]}  ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
 
 # ----  Weryfikacja poprawności IP2
 if [[ -n ${CFG[6]} ]] ; then
-  if parseip ${CFG[6]}  ; then
-    : # :
-  else
+  if ! parseip ${CFG[6]}  ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
+
+# ----  Weryfikacja parametru pasma 1 - BAND1
+if [[ -z ${CFG[9]} ]] ; then
+  CFG[9]="100Mbit"
+fi
+
+# ----  Weryfikacja parametru pasma 2 - BAND2
+if [[ -z ${CFG[10]} ]] ; then
+  CFG[10]="100Mbit"
+fi
+
+# ----  Weryfikacja parametru utraty pakietów - LOSS1
+if [[ -z ${CFG[11]} ]] ; then
+  CFG[11]="0.1%"
+fi
+
+# ----  Weryfikacja parametru utraty pakietów - LOSS2
+if [[ -z ${CFG[12]} ]] ; then
+  CFG[12]="0.1%"
+fi
+
+# ----  Weryfikacja parametru opóżnienia - DELAY1
+if [[ -z ${CFG[13]} ]] ; then
+  CFG[13]="1ms"
+fi
+
+# ----  Weryfikacja parametru opóżnienia - DELAY2
+if [[ -z ${CFG[14]} ]] ; then
+  CFG[14]="1ms"
+fi
+
+# ----  Weryfikacja parametru duplicowania - DUPLIC1
+if [[ -z ${CFG[28]} ]] ; then
+  CFG[28]="1%"
+fi
+
+# ----  Weryfikacja parametru duplicowania - DUPLIC2
+if [[ -z ${CFG[29]} ]] ; then
+  CFG[29]="1%"
+fi
+
+# ----  Weryfikacja nazwy łącza - LINK
+if [[ -n ${CFG[15]} ]] ; then
+  if ! checklink ${CFG[15]}  ; then
+    die 8 "Niepoprawna nazwa łącza"
+  fi
+fi
+
+
+
+# ----  Usuwanie kontenerów
+if [[ -n ${CFG[27]} ]] ; then
+  del_container
+  echo "Funkcja do zaprogramowania"
+  exit
+fi
+
+# Podgląd tablicy z parametrami
+# ---------------------
+for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+done
+
 
 # ------  Określenie rodzaju polaczenia (Host-Host, Host-Switch, Host-Router, Switch-Router, itp)
 # -----------------------------------------------------------------------------------------------
@@ -1046,6 +1146,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 129)						# h1        ---       r2
@@ -1073,6 +1174,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 224)						# h1 + ip1  ---  h2 
@@ -1096,6 +1198,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 161)						# h1 + ip1  ---         r2
@@ -1121,6 +1224,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 
@@ -1145,6 +1249,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 82)						# h1 + ip1  ---         r2
@@ -1170,6 +1275,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 
 240)						# h1 + ip1  ---  h2 + ip2  
@@ -1194,6 +1300,7 @@ case "$KOD" in
       set_if4
       crt_linkif4
       crt_brinqos
+      set_link
     else     
       exit 0
     fi
@@ -1225,6 +1332,7 @@ case "$KOD" in
       set_if4
       crt_linkif4
       crt_brinqos
+      set_link
     else     
       exit 0
     fi
@@ -1253,6 +1361,7 @@ case "$KOD" in
     set_if4
     crt_linkif4
     crt_brinqos
+    set_link
     ;;
 *)
     echo "Nieprawidłowe zestawienie parametrów."
@@ -1261,9 +1370,9 @@ esac
 
 # Podgląd tablicy z parametrami
 # ---------------------
-#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-#done
+for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+done
 
 echo Koniec
 exit 0
