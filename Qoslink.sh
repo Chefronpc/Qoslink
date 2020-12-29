@@ -857,7 +857,6 @@ ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 }
 
 set_link() {
-set -x
 msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
 #ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[25]}`)
 #ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[26]}`)
@@ -865,7 +864,6 @@ ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
-set +x
 }
 
 del_container() {
@@ -1092,9 +1090,9 @@ fi
 
 # Podgląd tablicy z parametrami
 # ---------------------
-for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-done
+#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+#done
 
 
 # ------  Określenie rodzaju polaczenia (Host-Host, Host-Switch, Host-Router, Switch-Router, itp)
@@ -1278,6 +1276,150 @@ case "$KOD" in
     set_link
     ;;
 
+
+98)						# h1 + ip1  ---         r2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_if1r1
+    crt_linkif1r1
+    set_if2
+    crt_linkif2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+
+
+35)						# h1 + ip1  ---         r2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_r2
+    crt_r2
+    set_if1r1
+    crt_linkif1r1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+
+145)						# h1 + ip1  ---         r2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r2
+    crt_r2
+    set_if1
+    crt_linkif1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+
+
+19)						# h1 + ip1  ---         r2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_r2
+    crt_r2
+    set_if1r1
+    crt_linkif1r1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+
+
+177)						# r1 + ip1  ---  h2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_r2
+      crt_r2
+      set_if1
+      crt_linkif1
+      set_if2r2
+      crt_linkif2r2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+    else     
+      exit 0
+    fi
+    ;;
+
+
+
 240)						# h1 + ip1  ---  h2 + ip2  
     comparenet "${CFG[5]}" "${CFG[6]}" "1"
     if [[ "$NET" -eq "3" ]] ; then
@@ -1305,6 +1447,39 @@ case "$KOD" in
       exit 0
     fi
     ;;
+
+
+114)						# r1 + ip1  ---  h2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_r1
+      crt_r1
+      set_if1r1
+      crt_linkif1r1
+      set_if2
+      crt_linkif2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+    else     
+      exit 0
+    fi
+    ;;
+
+
 
 51)						# h1 + ip1  ---  h2 + ip2  
     comparenet "${CFG[5]}" "${CFG[6]}" "1"
@@ -1363,6 +1538,38 @@ case "$KOD" in
     crt_brinqos
     set_link
     ;;
+
+3)
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_r2
+    crt_r2
+    set_if1r1
+    crt_linkif1r1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+
+
 *)
     echo "Nieprawidłowe zestawienie parametrów."
     exit 0 ;;  
@@ -1370,32 +1577,10 @@ esac
 
 # Podgląd tablicy z parametrami
 # ---------------------
-for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-done
+#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+#done
 
-echo Koniec
+echo Gotowe
 exit 0
-
-
-# Konfiguraacja poloczen kontenerow
-# ---------------------------------
-# bridge - host1
-pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
-msg "Polaczenie bridg'a -br1 <${CFG[7]}> z hostem <${CFG[1]}>"
-
-# bridge - host2
-pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
-msg "Polaczenie bridg'a -br2 <${CFG[8]}> z hostem <${CFG[2]}>"
-
-
-
-exit 0
-
-#tc qdisc del root dev eth1
-#tc qdisc del root dev eth2
-#tc qdisc add dev eth1 root handle 1:0 tbf rate 1Mbit latency 200ms burst 10k  
-#tc qdisc add dev eth2 root handle 1:0 tbf rate 5Mbit latency 200ms burst 10k  
-#tc qdisc add dev eth1 parent 1:1 handle 10:0 netem delay 1ms 1ms distribution normal loss 1% duplicate 1%
-#tc qdisc add dev eth2 parent 1:1 handle 10:0 netem delay 1ms 1ms distribution normal loss 1% duplicate 1%
 
