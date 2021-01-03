@@ -46,8 +46,53 @@ die () {
   exit "$status"
 }
 
+touch_dockerfile_qoslink() {
+: # :
+}
 
-# Weryfikacja wprowadzonych parametrów i ich zależności
+touch_dockerfile_quaggalink() {
+ 
+}
+
+crt_img_baseos() {
+  LISTIMAGES=(`docker images | awk '/centos[[:space:]]*6\.6/ {print}' `)
+  if [[ -z $LISTIMAGES ]] ; then
+    msg "Pobieranie skompresowanego obrazu systemu CentOS 6.6"
+    wget https://github.com/CentOS/sig-cloud-instance-images/blob/CentOS-6.6/docker/centos-6.6-20150304_1234-docker.tar.xz
+    wget https://github.com/CentOS/sig-cloud-instance-images/blob/CentOS-6.6/docker/Dockerfile
+    msg "Budowanie obrazu Centos 6.6"
+    STAT=$(docker build .)
+    IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
+    docker tag $IDCon centos:6.6
+    msg "Utworzono obraz centos:6.6 "
+  fi
+  exit 0
+}
+
+# Sprawdzanie dostępności obrazu quaggalink w repozytorium lokalnym / ew. utworzenie
+chk_img_quaggalink() {
+  LISTIMAGES=(`docker images | awk '/chefronpc/quaggalink:v1/ {print}' `)
+  if [[ -z $LISTIMAGES ]] ; then
+    # Sprawdzenie dostępności obrazu quaggalink w repo Docker
+    LISTIMAGES=(`docker search quaggalink | awk '/chefronpc/quaggalink:v1/ {print}' `)
+    if [[ -z $LISTIMAGES ]] ; then
+      # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
+      crt_img_baseos 
+      # Tworzenie pliku dockerfile dla konfiguracji kontenera Quaggalink
+      touch_dockerfile_quaggalink
+    else
+      # Pobranie obrazu quaggalink ze zdalnego repo Dokcer'a
+      docker pull chefronpc/quaggalink:v1
+    fi
+  fi
+  exit 0
+}
+
+chk_img_qoslink() {
+: # :
+}
+
+# Tworzenie obrazu systemu bazowego CentOS 6.6
 
 # Sprawdza dostępność bridga
 # We - $1 nazwa bridga
@@ -865,7 +910,7 @@ crt_c() {
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL quaggalink:v1 /bin/bash
+    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL quaggalink:v4 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
@@ -876,7 +921,7 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL quaggalink:v1 /bin/bash
+    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL quaggalink:v4 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
@@ -979,6 +1024,7 @@ checklink() {
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
 #   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29 )
 WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2)
+
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
 CNT=0
@@ -1064,7 +1110,13 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
     fi
   done
 done
-  
+
+# Sprawdzenie obecności obrazu systemu bazowego dla kontenerów Quaggalink i qoslink
+# ---------------------------------------------------------------------------------
+crt_img
+
+
+
 # Podgląd tablicy CFG[]
 # ---------------------
 #for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
