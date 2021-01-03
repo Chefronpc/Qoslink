@@ -858,14 +858,14 @@ return 0
 
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add NET_ADMIN qoslink:v1 /bin/bash
+  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add All qoslink:v1 /bin/bash
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add NET_ADMIN host:v1 /bin/bash
+    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL quaggalink:v1 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
@@ -876,7 +876,7 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add NET_ADMIN host:v1 /bin/bash
+    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL quaggalink:v1 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
