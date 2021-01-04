@@ -46,53 +46,139 @@ die () {
   exit "$status"
 }
 
-touch_dockerfile_qoslink() {
-: # :
+crt_dockerfile_qoslink() {
+  rm -Rf ./dockerfiles
+  mkdir ./dockerfiles
+  cd ./dockerfiles
+  echo "FROM centos:6.6" > dockerfile
+  echo "MAINTAINER Czyz Piotr" >> dockerfile
+
+  echo "RUN yum -y update" >> dockerfile
+  echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget" >> dockerfile
+  
+  #RUN echo "hostname quaggalink" > /etc/quagga/zebra.conf
+  #RUN echo "hostname quaggalink" > /etc/quagga/ripd.conf
+  #RUN echo "hostname quaggalink" > /etc/quagga/ospfd.conf
+  #RUN echo "password zebra" >> /etc/quagga/zebra.conf
+  #RUN echo "password zebra" >> /etc/quagga/ripd.conf
+  #RUN echo "password zebra" >> /etc/quagga/ospfd.conf
+  #RUN echo "enable password zebra" >> /etc/quagga/ripd.conf
+  #RUN echo "enable password zebra" >> /etc/quagga/ospfd.conf
+  #RUN chmod 640 /etc/quagga/zebra.conf
+  #RUN chmod 640 /etc/quagga/ripd.conf
+  #RUN chmod 640 /etc/quagga/ospfd.conf
+  #RUN chown quagga:quagga /etc/quagga/zebra.conf
+  #RUN chown quagga:quagga /etc/quagga/ripd.conf
+  #RUN chown quagga:quagga /etc/quagga/ospfd.conf
+
+  echo "RUN wget https://iperf.fr/download/iperf_2.0.2/iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
+  echo "&& tar zxf iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
+  echo "&& cp /iperf_2.0.2-4_amd64/iperf . \\" >> dockerfile
+  echo "&& rm -Rf iperf_2.0.2-4_amd64 \\" >> dockerfile
+  echo "&& rm -f iperf_2.0.2-4_amd64.tar.gz" >> dockerfile
+  cd ../
 }
 
-touch_dockerfile_quaggalink() {
- 
-}
+crt_dockerfile_quaggalink() {
+  rm -Rf ./dockerfiles
+  mkdir ./dockerfiles
+  cd ./dockerfiles
+  echo "FROM centos:6.6" > dockerfile
+  echo "MAINTAINER Czyz Piotr" >> dockerfile
 
-crt_img_baseos() {
+  echo "RUN yum -y update" >> dockerfile
+  echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget quagga" >> dockerfile
+  
+  #RUN echo "hostname quaggalink" > /etc/quagga/zebra.conf
+  #RUN echo "hostname quaggalink" > /etc/quagga/ripd.conf
+  #RUN echo "hostname quaggalink" > /etc/quagga/ospfd.conf
+  #RUN echo "password zebra" >> /etc/quagga/zebra.conf
+  #RUN echo "password zebra" >> /etc/quagga/ripd.conf
+  #RUN echo "password zebra" >> /etc/quagga/ospfd.conf
+  #RUN echo "enable password zebra" >> /etc/quagga/ripd.conf
+  #RUN echo "enable password zebra" >> /etc/quagga/ospfd.conf
+  #RUN chmod 640 /etc/quagga/zebra.conf
+  #RUN chmod 640 /etc/quagga/ripd.conf
+  #RUN chmod 640 /etc/quagga/ospfd.conf
+  #RUN chown quagga:quagga /etc/quagga/zebra.conf
+  #RUN chown quagga:quagga /etc/quagga/ripd.conf
+  #RUN chown quagga:quagga /etc/quagga/ospfd.conf
+
+  echo "RUN wget https://iperf.fr/download/iperf_2.0.2/iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
+  echo "&& tar zxf iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
+  echo "&& cp /iperf_2.0.2-4_amd64/iperf . \\" >> dockerfile
+  echo "&& rm -Rf iperf_2.0.2-4_amd64 \\" >> dockerfile
+  echo "&& rm -f iperf_2.0.2-4_amd64.tar.gz" >> dockerfile
+  cd ../
+}
+:
+chk_crt_img_centos66() {
   LISTIMAGES=(`docker images | awk '/centos[[:space:]]*6\.6/ {print}' `)
   if [[ -z $LISTIMAGES ]] ; then
     msg "Pobieranie skompresowanego obrazu systemu CentOS 6.6"
-    wget https://github.com/CentOS/sig-cloud-instance-images/blob/CentOS-6.6/docker/centos-6.6-20150304_1234-docker.tar.xz
-    wget https://github.com/CentOS/sig-cloud-instance-images/blob/CentOS-6.6/docker/Dockerfile
+    if [ ! -e "./centos-6-20150615_2019-docker.tar.xz" ] ; then
+      wget https://github.com/CentOS/sig-cloud-instance-images/blob/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/centos-6-20150615_2019-docker.tar.xz?raw=true
+      mv centos-6-20150615_2019-docker.tar.xz\?raw\=true centos-6-20150615_2019-docker.tar.xz
+    fi
+    if [ ! -e "./Dockerfile" ] ; then
+      wget https://github.com/CentOS/sig-cloud-instance-images/raw/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/Dockerfile
+    fi
     msg "Budowanie obrazu Centos 6.6"
     STAT=$(docker build .)
     IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
     docker tag $IDCon centos:6.6
     msg "Utworzono obraz centos:6.6 "
   fi
-  exit 0
+}
+
+# Sprawdzanie dostępności obrazu qoslink w repozytorium lokalnym / ew. utworzenie
+chk_crt_img_qoslink() {
+  LISTIMAGES=(`docker images | awk '/chefronpc\/qoslink/ {print}' `)
+  if [[ -z $LISTIMAGES ]] ; then
+    # Sprawdzenie dostępności obrazu qoslink w repo Docker
+    LISTIMAGES=(`docker search qoslink | awk '/chefronpc\/qoslink/ {print}' `)
+    if [[ -z $LISTIMAGES ]] ; then
+      # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
+      chk_crt_img_centos66 
+      # Tworzenie pliku dockerfile dla konfiguracji kontenera Qoslink
+      crt_dockerfile_qoslink
+      STAT=$(docker build ./dockerfiles/)
+      IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
+      docker tag $IDCon chefronpc/qoslink:v1
+      msg "Utworzono kontener qoslink"
+    else
+      # Pobranie obrazu qoslink ze zdalnego repo Dokcer'a
+      docker pull chefronpc/qoslink:v1
+    fi
+  fi
 }
 
 # Sprawdzanie dostępności obrazu quaggalink w repozytorium lokalnym / ew. utworzenie
-chk_img_quaggalink() {
-  LISTIMAGES=(`docker images | awk '/chefronpc/quaggalink:v1/ {print}' `)
+chk_crt_img_quaggalink() {
+  LISTIMAGES=(`docker images | awk '/chefronpc\/quaggalink/ {print}' `)
   if [[ -z $LISTIMAGES ]] ; then
     # Sprawdzenie dostępności obrazu quaggalink w repo Docker
-    LISTIMAGES=(`docker search quaggalink | awk '/chefronpc/quaggalink:v1/ {print}' `)
+    LISTIMAGES=(`docker search quaggalink | awk '/chefronpc\/quaggalink/ {print}' `)
     if [[ -z $LISTIMAGES ]] ; then
       # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
-      crt_img_baseos 
+      chk_crt_img_centos66 
       # Tworzenie pliku dockerfile dla konfiguracji kontenera Quaggalink
-      touch_dockerfile_quaggalink
+      crt_dockerfile_quaggalink
+      STAT=$(docker build ./dockerfiles/)
+      IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
+      docker tag $IDCon chefronpc/quaggalink:v1
+      msg "Utworzono kontener quaggalink"
     else
       # Pobranie obrazu quaggalink ze zdalnego repo Dokcer'a
       docker pull chefronpc/quaggalink:v1
     fi
   fi
-  exit 0
 }
 
 chk_img_qoslink() {
 : # :
 }
 
-# Tworzenie obrazu systemu bazowego CentOS 6.6
 
 # Sprawdza dostępność bridga
 # We - $1 nazwa bridga
@@ -903,14 +989,14 @@ return 0
 
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add All qoslink:v1 /bin/bash
+  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add All chefronpc/qoslink:v1 /bin/bash
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL quaggalink:v4 /bin/bash
+    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
@@ -921,7 +1007,7 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL quaggalink:v4 /bin/bash
+    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
@@ -1111,9 +1197,14 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   done
 done
 
-# Sprawdzenie obecności obrazu systemu bazowego dla kontenerów Quaggalink i qoslink
-# ---------------------------------------------------------------------------------
-crt_img
+# Sprawdzenie i ewentualne utworzenie obrazów kontenerów Quaggalink i Qoslink
+# ---------------------------------------------------------------------------
+chk_crt_img_quaggalink
+set -x
+chk_crt_img_qoslink
+set +x
+
+#exit 0
 
 
 
@@ -1948,4 +2039,3 @@ esac
 
 echo Gotowe
 exit 0
-
