@@ -15,7 +15,7 @@ QUAGGAPREFIX="quaggalink"
 QUAGGAMAX=256
 IFPREFIX="eth"
 IFMAX=64
-DEFAULTNET="10.1.1.0/24" # Domyślny adres sieci. Obsluga 254 sieci.
+DEFAULTNET="10.1.1.0/24" # Domyślny adres sieci. Obsluga pełnego zakresu adresacji sieci
 
 
 # Komentarze i błędy
@@ -89,20 +89,20 @@ crt_dockerfile_quaggalink() {
   echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget quagga" >> dockerfile
   
-  #RUN echo "hostname quaggalink" > /etc/quagga/zebra.conf
-  #RUN echo "hostname quaggalink" > /etc/quagga/ripd.conf
-  #RUN echo "hostname quaggalink" > /etc/quagga/ospfd.conf
-  #RUN echo "password zebra" >> /etc/quagga/zebra.conf
-  #RUN echo "password zebra" >> /etc/quagga/ripd.conf
-  #RUN echo "password zebra" >> /etc/quagga/ospfd.conf
-  #RUN echo "enable password zebra" >> /etc/quagga/ripd.conf
-  #RUN echo "enable password zebra" >> /etc/quagga/ospfd.conf
-  #RUN chmod 640 /etc/quagga/zebra.conf
-  #RUN chmod 640 /etc/quagga/ripd.conf
-  #RUN chmod 640 /etc/quagga/ospfd.conf
-  #RUN chown quagga:quagga /etc/quagga/zebra.conf
-  #RUN chown quagga:quagga /etc/quagga/ripd.conf
-  #RUN chown quagga:quagga /etc/quagga/ospfd.conf
+  echo "RUN echo \"hostname quaggalink\" > /etc/quagga/zebra.conf \\" >> dockerfile
+  echo "&& echo \"hostname quaggalink\" > /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& echo \"hostname quaggalink\" > /etc/quagga/ospfd.conf \\" >> dockerfile
+  echo "&& echo \"password zebra\" >> /etc/quagga/zebra.conf \\" >> dockerfile
+  echo "&& echo \"password zebra\" >> /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& echo \"password zebra\" >> /etc/quagga/ospfd.conf \\" >> dockerfile
+  echo "&& echo \"enable password zebra\" >> /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& echo \"enable password zebra\" >> /etc/quagga/ospfd.conf \\" >> dockerfile
+  echo "&& chmod 640 /etc/quagga/zebra.conf \\" >> dockerfile
+  echo "&& chmod 640 /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& chmod 640 /etc/quagga/ospfd.conf \\" >> dockerfile
+  echo "&& chown quagga:quagga /etc/quagga/zebra.conf \\" >> dockerfile
+  echo "&& chown quagga:quagga /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& chown quagga:quagga /etc/quagga/ospfd.conf" >> dockerfile
 
   echo "RUN wget https://iperf.fr/download/iperf_2.0.2/iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
   echo "&& tar zxf iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
@@ -335,9 +335,9 @@ checkinterface() {
 # --------------------------------
 freeinterface() {
   LISTINTERFACE=(`docker exec $1 ip a | awk -F': ' '{print $2}' | awk -F@ '/./ {print $1}' `)
-  for (( CNT=0; CNT<$IFMAX; CNT++ )) ; do
+  for (( CNT=1; CNT<$IFMAX; CNT++ )) ; do
     PASS=0 
-    for (( CNT2=0; CNT2<${#LISTINTERFACE[@]}; CNT2++ )) ; do
+    for (( CNT2=1; CNT2<${#LISTINTERFACE[@]}; CNT2++ )) ; do
       if [[ "$IFPREFIX$CNT" = "${LISTINTERFACE[$CNT2]}" ]] ; then 
         PASS=1
       fi
@@ -374,6 +374,9 @@ parseip() {
 # We - $3 1 Widoczność komunikatów,    0 - brak
 # ----------------------------
 comparenet() {
+  if ! installed ipcalc ; then
+    die 40 "Brak zainstalowanego programu IPCALC"
+  fi
   msg2 "Porównanie dwóch adresów sieci  ($1) i ($2)"
   M1=(`echo $1 | awk -F/ '{print $2}' `)
   M2=(`echo $2 | awk -F/ '{print $2}' `)
@@ -675,6 +678,8 @@ freeip() {
     fi
   done
   NEWIP="$I0.$I1.$I2.$I3/$M1"
+  NEWGW="${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.$[BROADCAST1[3]-1]/$M1"
+  msg "Adres domyślny gateway: $NEWGW"
   msg2 " -----------------------------------" # rem
   msg2 " WOLNY ADRES IP:  $NEWIP" # rem
   msg2 " -----------------------------------" # rem
@@ -719,7 +724,7 @@ freenet() {
       fi
     done
     if [[ ${CFG[22]} == "0" ]] ; then
-      echo "LISTA: ${LISTIM[@]}"
+      msg2 "LISTA: ${LISTIM[@]}"
     fi
   done
 
@@ -989,14 +994,16 @@ return 0
 
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --cap-add All chefronpc/qoslink:v1 /bin/bash
+  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add All chefronpc/qoslink:v1 /bin/bash
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
+    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
+    docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start'
+    docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" '
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
@@ -1007,7 +1014,9 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
+    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
+    docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start'
+    docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" '
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
@@ -1019,11 +1028,15 @@ crt_r2() {
 # -----  Tworzenie połączen pomiędzy bridgem a kontenerem
 crt_linkif1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
+#  docker exec ${CFG[1]} ip route del default
+#  docker exec ${CFG[1]} ip route add default via $NEWGW
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
 }
 
 crt_linkif2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
+#  docker exec ${CFG[2]} ip route del default
+#  docker exec ${CFG[2]} ip route add default via $NEWGW
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]}"
 }
 
@@ -1038,13 +1051,45 @@ crt_linkif4() {
 }
 
 crt_linkif1r1() {
+#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+#done
+#set -x
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
+  # Konfiguracja daemona ZEBRA w routerze
+  docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" 
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
+  NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
+  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
+  ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
+  # Konfiguracja daemona OSPF w routerze
+  docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
+#set +x
 }
 
 crt_linkif2r2() {
+#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
+#done
+#set -x
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
+  # Konfiguracja daemona ZEBRA w routerze
+  docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write"
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
+  NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
+  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
+  ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
+  # Konfiguracja daemona OSPF w routerze
+  docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
+#set +x
 }
 
 crt_linkif3sw1() {
@@ -1108,8 +1153,8 @@ checklink() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2)
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2)
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -1200,13 +1245,7 @@ done
 # Sprawdzenie i ewentualne utworzenie obrazów kontenerów Quaggalink i Qoslink
 # ---------------------------------------------------------------------------
 chk_crt_img_quaggalink
-set -x
 chk_crt_img_qoslink
-set +x
-
-#exit 0
-
-
 
 # Podgląd tablicy CFG[]
 # ---------------------
@@ -1252,17 +1291,31 @@ if [[ -n ${CFG[17]} ]] ; then
   fi
 fi
 
-# -----  Weryfikacja interfejsu  IF1  -----
+# -----  Weryfikacja interfejsu  IF1 w H1  -----
 if [[ -n ${CFG[3]} ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[1]}" ; then
     die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
   fi
 fi
 
-# -----  Weryfikacja interfejsu  IF2  -----
+# -----  Weryfikacja interfejsu  IF2 w H2  -----
 if [[ -n ${CFG[4]} ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[2]}" ; then
     die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
+  fi
+fi
+
+# -----  Weryfikacja interfejsu  IF1 w R1  -----
+if [[ -n ${CFG[3]} ]] ; then
+  if checkinterface "${CFG[3]}" "${CFG[18]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[18]}"
+  fi
+fi
+
+# -----  Weryfikacja interfejsu  IF2 w R2  -----
+if [[ -n ${CFG[4]} ]] ; then
+  if checkinterface "${CFG[4]}" "${CFG[19]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[19]}"
   fi
 fi
 
