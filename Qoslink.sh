@@ -374,9 +374,6 @@ parseip() {
 # We - $3 1 Widoczność komunikatów,    0 - brak
 # ----------------------------
 comparenet() {
-  if ! installed ipcalc ; then
-    die 40 "Brak zainstalowanego programu IPCALC"
-  fi
   msg2 "Porównanie dwóch adresów sieci  ($1) i ($2)"
   M1=(`echo $1 | awk -F/ '{print $2}' `)
   M2=(`echo $2 | awk -F/ '{print $2}' `)
@@ -1028,16 +1025,30 @@ crt_r2() {
 # -----  Tworzenie połączen pomiędzy bridgem a kontenerem
 crt_linkif1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
-#  docker exec ${CFG[1]} ip route del default
-#  docker exec ${CFG[1]} ip route add default via $NEWGW
-  msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
+  if [[ -n ${CFG[30]} ]] ; then
+    if [[ "${CFG[30]}" == "setgw" ]] ; then
+      BCAST1=(` ipcalc ${CFG[5]} -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+      CFG[30]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
+    fi
+    docker exec ${CFG[1]} ip route add default via ${CFG[30]}
+    msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]} gateway:${CFG[30]}"
+  else  
+    msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
+  fi
 }
 
 crt_linkif2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
-#  docker exec ${CFG[2]} ip route del default
-#  docker exec ${CFG[2]} ip route add default via $NEWGW
-  msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]}"
+  if [[ -n ${CFG[31]} ]] ; then
+    if [[ "${CFG[31]}" == "setgw" ]] ; then
+      BCAST1=(` ipcalc ${CFG[6]} -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+      CFG[31]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
+    fi
+    docker exec ${CFG[2]} ip route add default via ${CFG[31]}
+    msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]} gateway:${CFG[31]}"
+  else  
+    msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]}"
+  fi  
 }
 
 crt_linkif3() {
@@ -1051,10 +1062,6 @@ crt_linkif4() {
 }
 
 crt_linkif1r1() {
-#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-#done
-#set -x
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
   # Konfiguracja daemona ZEBRA w routerze
@@ -1068,14 +1075,9 @@ crt_linkif1r1() {
   # Konfiguracja daemona OSPF w routerze
   docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
-#set +x
 }
 
 crt_linkif2r2() {
-#for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-#  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
-#done
-#set -x
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
   # Konfiguracja daemona ZEBRA w routerze
@@ -1089,7 +1091,6 @@ crt_linkif2r2() {
   # Konfiguracja daemona OSPF w routerze
   docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
-#set +x
 }
 
 crt_linkif3sw1() {
@@ -1122,12 +1123,13 @@ ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 
 set_link() {
 msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
-#ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[25]}`)
-#ANS=(`docker exec ${CFG[0]} tc qdisc del root dev ${CFG[26]}`)
+
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
 ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+
+
 }
 
 
@@ -1153,8 +1155,8 @@ checklink() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2)
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2)
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -1175,18 +1177,6 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
       CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru 
       CFGNEXT=${CFGNEXT:0:1}		# "-" lub pusty ciąg oznacza brak argumentu 
 					# w bieżacym parametrze (np. -sw1 -h2 serwer
-
-      if [ ${PARAM[$CNT]} = "-update" ] ; then		# Aktualizacja danych 
-        CFG[$CNT2]=0
-      fi
-
-      if [ ${PARAM[$CNT]} = "-v" ] ; then		# Wyswietlanie komunikatow
-        CFG[$CNT2]=0
-      fi
-
-      if [ ${PARAM[$CNT]} = "-V" ] ; then		# Wyswietlanie komunikatow debugowania
-        CFG[$CNT2]=0
-      fi
 
       if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Wtymusza automatyczną nazwę routera
         if [[ -n ${CFG[$CNT2]} ]] ; then
@@ -1228,14 +1218,46 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-D" ] ; then		# Usuwanie wszystkich kontenerów
-        if [[ -n ${CFG[$CNT2]} ]] ; then
+      if [ ${PARAM[$CNT]} = "-gw1" ] ; then 
+        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
+          if [[ "$CFGNEXT" = "-" ]] ; then
+            CFG[$CNT2]="setgw"
+          fi
+        else
+          CFG[$CNT2]="setgw"
+        fi
+      fi
+
+      if [ ${PARAM[$CNT]} = "-gw2" ] ; then 
+        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
+          if [[ "$CFGNEXT" = "-" ]] ; then
+            CFG[$CNT2]="setgw"
+          fi
+        else
+          CFG[$CNT2]="setgw"
+        fi
+      fi
+
+      if [ ${PARAM[$CNT]} = "-D" ] ; then		# Usuwanie wszystkich
+        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
           if [[ "$TMP" = "-" ]] ; then
             CFG[$CNT2]="deldefaultnamecnt"
           fi
         else
           CFG[$CNT2]="deldefaultnamecnt"
         fi
+      fi
+
+      if [ ${PARAM[$CNT]} = "-U" ] ; then		# Aktualizacja danych 
+        CFG[$CNT2]=0
+      fi
+
+      if [ ${PARAM[$CNT]} = "-v" ] ; then		# Wyswietlanie komunikatow
+        CFG[$CNT2]=0
+      fi
+
+      if [ ${PARAM[$CNT]} = "-V" ] ; then		# Wyswietlanie komunikatow debugowania
+        CFG[$CNT2]=0
       fi
 
     fi
@@ -1257,6 +1279,93 @@ chk_crt_img_qoslink
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
+
+# ----  Weryfikacja parametru pasma 1 - BAND1
+# Automatyczna wartość gdy tworzymy nowe łącze i nie podamy danego parametru
+if [[ -z ${CFG[9]} && ! ${CFG[20]} ]] ; then
+  CFG[9]="100Mbit" 
+else
+# W przeciwnym wypadku sprawdzamy jego poprawność 
+  if [[ -n ${CFG[9]} ]] ; then
+    msg "Parser BAND1"
+  fi
+fi
+
+# ----  Weryfikacja parametru pasma 2 - BAND2
+if [[ -z ${CFG[10]} && ! ${CFG[20]} ]] ; then
+  CFG[10]="100Mbit"
+else
+  if [[ -n ${CFG[10]} ]] ; then
+    msg "Parser BAND2"
+  fi
+fi
+
+# ----  Weryfikacja parametru utraty pakietów - LOSS1
+if [[ -z ${CFG[11]} && ! ${CFG[20]} ]] ; then
+  CFG[11]="0%"
+else
+  if [[ -n ${CFG[11]} ]] ; then
+    msg "Parser LOSS1"
+  fi
+fi
+
+# ----  Weryfikacja parametru utraty pakietów - LOSS2
+if [[ -z ${CFG[12]} && ! ${CFG[20]} ]] ; then
+  CFG[12]="0%"
+else
+  if [[ -n ${CFG[12]} ]] ; then
+    msg "Parser LOSS2"
+  fi
+fi
+
+# ----  Weryfikacja parametru opóżnienia - DELAY1
+if [[ -z ${CFG[13]} && ! ${CFG[20]} ]] ; then
+  CFG[13]="0ms"
+else
+  if [[ -n ${CFG[13]} ]] ; then
+    msg "Parser DELAY1"
+  fi
+fi
+
+# ----  Weryfikacja parametru opóżnienia - DELAY2
+if [[ -z ${CFG[14]} && ! ${CFG[20]} ]] ; then
+  CFG[14]="0ms"
+else
+  if [[ -n ${CFG[14]} ]] ; then
+    msg "Parser DELAY2"
+  fi
+fi
+
+# ----  Weryfikacja parametru duplicowania - DUPLIC1
+if [[ -z ${CFG[28]} && ! ${CFG[20]} ]] ; then
+  CFG[28]="0%"
+else
+  if [[ -n ${CFG[28]} ]] ; then
+    msg "Parser DUPLIC1"
+  fi
+fi
+
+# ----  Weryfikacja parametru duplicowania - DUPLIC2
+if [[ -z ${CFG[29]} && ! ${CFG[20]} ]] ; then
+  CFG[29]="0%"
+else
+  if [[ -n ${CFG[29]} ]] ; then
+    msg "Parser DUPLIC2"
+  fi
+fi
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  do zrobienia  !!!!!!!!!!!!!!!
+# ----  Weryfikacja nazwy łącza - LINK
+if [[ -n ${CFG[15]} && ! ${CFG[20]} ]] ; then
+  if ! checklink ${CFG[15]}  ; then
+    die 8 "Niepoprawna nazwa łącza"
+  fi
+fi
+
+# -----  Aktualizacja parametrów  -----
+if [[ ${CFG[20]} ]] ; then
+: # :  
+fi
 
 # -----  Weryfikacja nazwy kontenera  -------
 if [[ -n ${CFG[0]} ]] ; then
@@ -1346,55 +1455,6 @@ if [[ -n ${CFG[6]} ]] ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
-
-# ----  Weryfikacja parametru pasma 1 - BAND1
-if [[ -z ${CFG[9]} ]] ; then
-  CFG[9]="100Mbit"
-fi
-
-# ----  Weryfikacja parametru pasma 2 - BAND2
-if [[ -z ${CFG[10]} ]] ; then
-  CFG[10]="100Mbit"
-fi
-
-# ----  Weryfikacja parametru utraty pakietów - LOSS1
-if [[ -z ${CFG[11]} ]] ; then
-  CFG[11]="0%"
-fi
-
-# ----  Weryfikacja parametru utraty pakietów - LOSS2
-if [[ -z ${CFG[12]} ]] ; then
-  CFG[12]="0%"
-fi
-
-# ----  Weryfikacja parametru opóżnienia - DELAY1
-if [[ -z ${CFG[13]} ]] ; then
-  CFG[13]="0ms"
-fi
-
-# ----  Weryfikacja parametru opóżnienia - DELAY2
-if [[ -z ${CFG[14]} ]] ; then
-  CFG[14]="0ms"
-fi
-
-# ----  Weryfikacja parametru duplicowania - DUPLIC1
-if [[ -z ${CFG[28]} ]] ; then
-  CFG[28]="0%"
-fi
-
-# ----  Weryfikacja parametru duplicowania - DUPLIC2
-if [[ -z ${CFG[29]} ]] ; then
-  CFG[29]="0%"
-fi
-
-# ----  Weryfikacja nazwy łącza - LINK
-if [[ -n ${CFG[15]} ]] ; then
-  if ! checklink ${CFG[15]}  ; then
-    die 8 "Niepoprawna nazwa łącza"
-  fi
-fi
-
-
 
 # ----  Usuwanie kontenerów
 if [[ -n ${CFG[27]} ]] ; then
