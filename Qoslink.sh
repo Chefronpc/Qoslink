@@ -56,21 +56,6 @@ crt_dockerfile_qoslink() {
   echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget" >> dockerfile
   
-  #RUN echo "hostname quaggalink" > /etc/quagga/zebra.conf
-  #RUN echo "hostname quaggalink" > /etc/quagga/ripd.conf
-  #RUN echo "hostname quaggalink" > /etc/quagga/ospfd.conf
-  #RUN echo "password zebra" >> /etc/quagga/zebra.conf
-  #RUN echo "password zebra" >> /etc/quagga/ripd.conf
-  #RUN echo "password zebra" >> /etc/quagga/ospfd.conf
-  #RUN echo "enable password zebra" >> /etc/quagga/ripd.conf
-  #RUN echo "enable password zebra" >> /etc/quagga/ospfd.conf
-  #RUN chmod 640 /etc/quagga/zebra.conf
-  #RUN chmod 640 /etc/quagga/ripd.conf
-  #RUN chmod 640 /etc/quagga/ospfd.conf
-  #RUN chown quagga:quagga /etc/quagga/zebra.conf
-  #RUN chown quagga:quagga /etc/quagga/ripd.conf
-  #RUN chown quagga:quagga /etc/quagga/ospfd.conf
-
   echo "RUN wget https://iperf.fr/download/iperf_2.0.2/iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
   echo "&& tar zxf iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
   echo "&& cp /iperf_2.0.2-4_amd64/iperf . \\" >> dockerfile
@@ -263,7 +248,7 @@ checkcontainer() {
   done
   return 1
 }
- 
+
 # Zwraca numer pierwszego wolnego kontenera
 # Wy - nazwa kontenera
 # --------------------------------
@@ -991,16 +976,16 @@ return 0
 
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add All chefronpc/qoslink:v1 /bin/bash
+  ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add All chefronpc/qoslink:v1 /bin/bash `)
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-    docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
-    docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start'
-    docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" '
+    ANS=(` docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
+    ANS=(` docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start' `)
+    ANS=(` docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
@@ -1011,9 +996,9 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-    docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash
-    docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start'
-    docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" '
+    ANS=(` docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `)
+    ANS=(` docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start' `)
+    ANS=(` docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
@@ -1065,7 +1050,7 @@ crt_linkif1r1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
   # Konfiguracja daemona ZEBRA w routerze
-  docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" 
+  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
@@ -1073,7 +1058,7 @@ crt_linkif1r1() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
+  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
 
@@ -1081,7 +1066,7 @@ crt_linkif2r2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
   # Konfiguracja daemona ZEBRA w routerze
-  docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write"
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
@@ -1089,7 +1074,7 @@ crt_linkif2r2() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write"
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
 }
 
@@ -1108,29 +1093,97 @@ crt_linkif4sw2() {
 # ----  umożliwia przekazywanie pakietów poprzez kontener <qoslinkxx>
 # ----  z zachowaniem zadanych parametrów transmisji
 crt_brinqos() {
-msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący intefejsy ${CFG[25]} oraz ${CFG[26]}"
-msg "Adres ip ${CFG[0]} to ${CFG[23]}.  Adres ip ${CFG[24]} zostaje zwolniony."
-ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
-ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
-ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
-ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
-ANS=(`docker exec ${CFG[0]} brctl addbr br0`)
-ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[25]}`)
-ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[26]}`)
-ANS=(`docker exec ${CFG[0]} ip addr add ${CFG[23]} dev br0`)
-ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
+  msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący intefejsy ${CFG[25]} oraz ${CFG[26]}"
+  msg "Adres ip ${CFG[0]} to ${CFG[23]}.  Adres ip ${CFG[24]} zostaje zwolniony."
+  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
+  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
+  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
+  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
+  ANS=(`docker exec ${CFG[0]} brctl addbr br0`)
+  ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[25]}`)
+  ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[26]}`)
+  ANS=(`docker exec ${CFG[0]} ip addr add ${CFG[23]} dev br0`)
+  ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 }
 
 set_link() {
-msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
+  msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
 
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
 
-
+  BUF=""
+  for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+    if [[ -z ${CFG[$CNT]} ]] ; then
+      BUF=${BUF}:_
+    else
+      BUF=${BUF}:${CFG[$CNT]}
+    fi
+#    echo "Parametr CFG[${CNT}] =  ${CFG[$CNT]}"
+  done
+#  echo "### $MAXCFG $BUF ###"
+  echo $BUF > buffor_cfg.dat
+  docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
 }
+
+
+upgarde_link() {
+  rm -f buffor_cfg.dat
+  docker cp ${CFG[0]}:/buffor_cfg.dat buffor_cfg.dat
+  CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
+  for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+    if [[ ${CFG2[$CNT]} == "_" ]] ; then
+      CFG2[$CNT]=""
+    fi
+    echo "CFG2[$CNT]=${CFG2[$CNT]}"
+  done
+  if [[ -n ${CFG[9]} ]] ; then
+    CFG2[9]=${CFG[9]}
+  fi
+  if [[ -n ${CFG[10]} ]] ; then
+    CFG2[10]=${CFG[10]}
+  fi
+  if [[ -n ${CFG[11]} ]] ; then
+    CFG2[11]=${CFG[11]}
+  fi
+  if [[ -n ${CFG[12]} ]] ; then
+    CFG2[12]=${CFG[12]}
+  fi
+  if [[ -n ${CFG[13]} ]] ; then
+    CFG2[13]=${CFG[13]}
+  fi
+  if [[ -n ${CFG[14]} ]] ; then
+    CFG2[14]=${CFG[14]}
+  fi
+  if [[ -n ${CFG[28]} ]] ; then
+    CFG2[28]=${CFG[28]}
+  fi
+  if [[ -n ${CFG[29]} ]] ; then
+    CFG2[29]=${CFG[29]}
+  fi
+  msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
+  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+
+  BUF=""
+  for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+    if [[ -z ${CFG2[$CNT]} ]] ; then
+      BUF=${BUF}:_
+    else
+      BUF=${BUF}:${CFG2[$CNT]}
+    fi
+  msg2 "Parametr CFG2[${CNT}] =  ${CFG2[$CNT]}"
+  done
+  msg2 "### $MAXCFG $BUF ###"
+  echo $BUF > buffor_cfg.dat
+  docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
+return
+}
+
 
 
 del_container() {
@@ -1154,7 +1207,7 @@ checklink() {
 #             skrypcie pipework autorstwa ............... udostępnionego na licencji ......
 # ---------------------------------------------------------------------------------------------
 #
-#   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skyptu
+#   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skryptu
 #   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 )
 WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2)
 
@@ -1362,10 +1415,21 @@ if [[ -n ${CFG[15]} && ! ${CFG[20]} ]] ; then
   fi
 fi
 
-# -----  Aktualizacja parametrów  -----
+# -----  Aktualizacja parametrów łącza QOSLINK -----
+set -x
 if [[ ${CFG[20]} ]] ; then
-: # :  
+  if [[ -n ${CFG[0]} ]] ; then
+    if checkcontainer "${CFG[0]}" ; then
+      upgrade_link
+    else
+      die 51 "Brak kontenera o podanej nazwie: ${CFG[0]}"
+    fi
+  else
+    die 50 "Nie podano nazwy kontenera -c"
+  fi  
 fi
+set +x
+
 
 # -----  Weryfikacja nazwy kontenera  -------
 if [[ -n ${CFG[0]} ]] ; then
