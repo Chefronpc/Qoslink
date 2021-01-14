@@ -1,7 +1,4 @@
 #!/bin/bash
-set -e
-
-#  set +x
 
 # Parametry wstępne -  Globalne
 # ----------------
@@ -15,28 +12,33 @@ QUAGGAPREFIX="quaggalink"
 QUAGGAMAX=256
 IFPREFIX="eth"
 IFMAX=64
-DEFAULTNET="10.1.1.0/24" # Domyślny adres sieci. Obsluga pełnego zakresu adresacji sieci
+DEFAULTNET="10.0.0.0/28" # Domyślny adres sieci. Obsluga pełnego zakresu adresacji sieci
 
+R="\e[31m"  # Kolory komunikatów
+Y="\e[33m"
+G="\e[32m"
+B="\e[34m"
+BCK="\e[0m"   # powrót do stadanrdowego zestawu kolorów terminala
 
 # Komentarze i błędy
 # ------------------------------
 msg () {                        # Komentarze wyswietlane przy ustawionej opcji  -v
   if [[ ${CFG[21]} ]] ; then
-    echo $1$2$3$4$5$6$7$8$9
+    echo -e $1$2$3$4$5$6$7$8$9
   fi
 }
 
 msg2 () {                       # Komunikaty debugowania wyswietlane przy ustawionej opcji  -V
   if [[ ${CFG[22]} ]] ; then
-    echo $1$2$3$4$5$6$7$8$9
+    echo -e $1$2$3$4$5$6$7$8$9
   fi
 }
 
 err () {
 #  if [[ ${CFG[22]} ]] ; then   # Ustawić prawidlowy numer $CFG[xx]
-   echo "$1" >&2
-   echo "$2" >&2
-   echo "$3" >&2
+   echo -e "${R}$1${BCK}" >&2
+   echo -e "${R}$2${BCK}" >&2
+   echo -e "${R}$3${BCK}" >&2
 #  fi
 }
 die () {
@@ -345,10 +347,10 @@ parseip() {
   M=(`echo $1 | awk -F/ '{print $2}' `)
   IP=(`echo $1 | awk -F/ '{print $1}' | awk -F. '{print $1,$2,$3,$4}' `)
   if [[ -n $ANS1 ]] && [[ "$M" -gt  "1" ]] && [[ "$M" -lt "30" ]] ; then
-    msg2 "Parse IP - poprawne"
+    msg2 "${Y}Parse IP - poprawne${BCK}"
     return 0		# IP/mask poprawne
   else
-    msg2 "Parse IP - niepoprawne"
+    msg2 "${Y}Parse IP - niepoprawne${BCK}"
     return 1		# IP/mask błędne
   fi
 }
@@ -359,7 +361,7 @@ parseip() {
 # We - $3 1 Widoczność komunikatów,    0 - brak
 # ----------------------------
 comparenet() {
-  msg2 "Porównanie dwóch adresów sieci  ($1) i ($2)"
+  msg2 "${Y}Porównanie dwóch adresów sieci  ($1) i ($2) ${BCK}"
   M1=(`echo $1 | awk -F/ '{print $2}' `)
   M2=(`echo $2 | awk -F/ '{print $2}' `)
   IP1=(`echo $1 | awk -F/ '{print $1}' | awk -F. '{print $1,$2,$3,$4}' `)
@@ -375,7 +377,7 @@ comparenet() {
       if [[ "${IP1[0]}" -eq "${IP2[0]}" ]] && [[ "${IP1[1]}" -eq "${IP2[1]}" ]] && [[ "${IP1[2]}" -eq "${IP2[2]}" ]] && [[ "${IP1[3]}" -eq "${IP2[3]}" ]] ; then		
         NET=0		# Konflikt adresów IP
         if [[ "$3" -eq "1" ]] ; then 
-          msg "Konflikt adresów IP:  $1"
+          msg "${RED}Konflikt adresów IP:  $1${BCK}"
         fi
         return 
       else
@@ -388,72 +390,20 @@ comparenet() {
     else
       NET=2  		# Różne podsieci 
       if [[ "$3" -eq "1" ]] ; then 
-        msg "Adresy sieci $1 $2 niezgodne"
+        msg "${R}Adresy sieci $1 $2 niezgodne${BCK}"
       fi
       return
     fi
   else
     NET=1			# Różne długości maski
     if [[ "$3" -eq "1" ]] ; then 
-      msg "Różne długości adresu sieci (maski) $1 $2"
+      msg "${R}Różne długości maski w adresach $1 $2${BCK}"
     fi
     return
   fi
   die 20 "Bład w funkcji comparenet()"
 }
 
-
-# Sprawdza dostępnosc parametrów sieci w podanym kontenerze
-# We - $1 IP/Netmask
-# We - $2 nazwa kontenera
-# ------------------------------------
-checkipcnt_old() {
-  msg "Weryfikacja adresu IP $1 w kontenerze $2" 
-  if parseip "$1" ; then
-    LISTIP=(`docker exec $2 ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
- #   echo ${LISTIP[@]}
- #   echo ${#LISTIP[@]}
-    let LISTIPMAX=${#LISTIP[@]}
-  #  echo $LISTIPMAX
-    STAT=1				# Domyslnie IP jest poza adresacja sieci w testowanym kontenerze
-    for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
-
-      if [[ "$1" = "${LISTIP[$CNT]}" ]] ; then
-        die 15 "Konflikt adresów IP $1 w kontenerze $2"
-        return 		# Podane IP jest w konflikcie z IP w danym kontenerze
-      fi
-#      echo ----- $CNT:  $1   ----  ${LISTIP[$CNT]}    ------
-      comparenet "$1" "${LISTIP[$CNT]}"
-#   echo eurpqurouroqurpoqueroqurouweo
-#    echo ++++ $NET:    $STAT
-      case "$NET" in
-        "3")
-#          echo "check case - podsieci zgodne IP bez konfliktu"
-          if [[ "$STAT" -lt "4" ]] ; then 
-            STAT=3
-          fi ;;
-        "2")
-#          echo "check case - podsieci rózne"
-          if [[ "$STAT" -lt "3" ]] ; then
-            STAT=2
-          fi ;;
-        "1")
-#          echo "check case - rozne dlugosci maski"
-          if [[ "$STAT" -lt "2" ]] ; then
-            STAT=1
-          fi ;;
-        "0")
-#          echo "check case - konflikt adresow"
-	  die 15 "Konflikt adresów IP $1 w kontenerze $2"
-          ;;
-      esac
-    done
-#      echo " STAT = $STAT"
-      return
-  elseif
-    die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
-  fi
-}
 
 # Sprawdza dostępnosc parametrów sieci we wszystkich kontenerze
 # We - $1 IP/Netmask
@@ -467,14 +417,14 @@ checkipall() {
       die 25 "Adres IP $1 nie może byc adresem sieci."
     fi
     if [[ "${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.${BROADCAST1[3]}/$M1" == "$1" ]] ; then
-      die 26 "Adres IP $1 nie może być sdresem broadcast."
+      die 26 "Adres IP $1 nie może być adresem broadcast."
     fi
 
     STAT=1				# Domyslnie IP jest poza adresacja sieci w testowanym kontenerze
     LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
     for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
       msg2 "="  # rem
-      msg2 "=============  kontener  ${LISTCONTAINER[$CNT2]}  ===================" # rem
+      msg2 "============= ${Y} kontener  ${LISTCONTAINER[$CNT2]} ${BCK} ===================" # rem
       LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
       let LISTIPMAX=${#LISTIP[@]}
       for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
@@ -503,14 +453,14 @@ checkipall() {
           "0")
             msg2 "check case - konflikt adresow"
              tmp=$1; tmp2=${LISTCONTAINER[$CNT2]}
-             msg "Wykryto konflikt adresów ..."
+             msg "${R}Wykryto konflikt adresów ...${BCK}"
              freeip $1
-             die 15 "Konflikt adresów IP $tmp w kontenerze $tmp2. " "Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: $NEWIP"
+             die 15 "Konflikt adresów IP $tmp w kontenerze $tmp2." "${BCK}Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: ${G}$NEWIP${BCK}"
             ;;
         esac
       done
     done
-    msg "Brak konfliku dla adresu $1"
+    msg "Brak konfliku dla adresu ${G}$1${BCK}"
     return
   elseif
     die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
@@ -661,11 +611,11 @@ freeip() {
   done
   NEWIP="$I0.$I1.$I2.$I3/$M1"
   NEWGW="${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.$[BROADCAST1[3]-1]/$M1"
+  msg2 " -----------------------------------" # rem
+  msg2 " ${Y}WOLNY ADRES IP:  $NEWIP ${BCK}" # rem
+  msg2 " -----------------------------------" # rem
+  msg "Rezerwacja adresu IP: ${G}$NEWIP${BCK}"
   msg "Adres domyślny gateway: $NEWGW"
-  msg2 " -----------------------------------" # rem
-  msg2 " WOLNY ADRES IP:  $NEWIP" # rem
-  msg2 " -----------------------------------" # rem
-  msg "Rezerwacja adresu IP: $NEWIP"
  return 0
 }
 
@@ -823,9 +773,9 @@ freenet() {
 
   NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
   msg2 " -----------------------------------" # rem
-  msg2 " Wolny adres sieci IP: $NEWNET"
+  msg2 " ${Y}Wolny adres sieci IP: $NEWNET${BCK}"
   msg2 " -----------------------------------" # rem
-  msg "Rezerwacja adresu sieci: $NEWNET"
+  msg "Rezerwacja adresu sieci: ${G}$NEWNET${BCK}"
  return 0
 }
 
@@ -836,7 +786,7 @@ set_c() {
 if [[ -z ${CFG[0]} ]] ; then
   if freecontainer ; then 
     CFG[0]=$QOSNAME
-    msg "Przypisano nazwę kontenera -c: <${CFG[0]}>"
+    msg "Przypisano nazwę kontenera -c: <${G}${CFG[0]}${BCK}>"
   fi
 fi
 return 0
@@ -847,7 +797,7 @@ set_r1() {
 if [[ "${CFG[18]}" == "setnamecntquagga" ]] ; then
   if freerouter ; then 
     CFG[18]=$QUAGGANAME
-    msg "Przypisano nazwę routera w kontenerze -r1: <${CFG[18]}>"
+    msg "Przypisano nazwę routera w kontenerze -r1: <${G}${CFG[18]}${BCK}>"
   fi
 fi
 return 0
@@ -858,7 +808,7 @@ set_r2() {
 if [[ "${CFG[19]}" == "setnamecntquagga" ]] ; then
   if freerouter ; then 
     CFG[19]=$QUAGGANAME
-    msg "Przypisano nazwę routera w kontenerze -r2: <${CFG[19]}>"
+    msg "Przypisano nazwę routera w kontenerze -r2: <${G}${CFG[19]}${BCK}>"
   fi
 fi
 return 0
@@ -891,7 +841,7 @@ set_sw1() {
 if [[ "${CFG[16]}" == "setnamebrswitch" ]] ; then
   if freeswitch ; then 
     CFG[16]=$SWNAME
-    msg "Przypisano nazwę switcha -sw1: <${CFG[16]}>"
+    msg "Przypisano nazwę switcha -sw1: <${G}${CFG[16]}${BCK}>"
   fi
 fi
 return 0
@@ -902,7 +852,7 @@ set_sw2() {
 if [[ "${CFG[17]}" == "setnamebrswitch" ]] ; then
   if freeswitch ; then 
     CFG[17]=$SWNAME
-    msg "Przypisano nazwę switcha -sw2: <${CFG[17]}>"
+    msg "Przypisano nazwę switcha -sw2: <${G}${CFG[17]}${BCK}>"
   fi
 fi
 return 0
@@ -913,7 +863,7 @@ set_if1() {
 if [[ -z ${CFG[3]} ]] ; then
   if freeinterface "${CFG[1]}" ; then
     CFG[3]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if1: <${CFG[3]}> ip:${CFG[5]} w kontenerze <${CFG[1]}>"
+    msg "Przypisano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> dla ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[1]}${BCK}>"
   fi
 fi
 return 0
@@ -924,7 +874,7 @@ set_if2() {
 if [[ -z ${CFG[4]} ]] ; then
   if freeinterface "${CFG[2]}" ; then
     CFG[4]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if2: <${CFG[4]}> ip:${CFG[6]} w kontenerze <${CFG[2]}>"
+    msg "Przypisano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[2]}${BCK}>"
   fi
 fi
 return 0
@@ -935,7 +885,7 @@ set_if1r1() {
 if [[ -z ${CFG[3]} ]] ; then
   if freeinterface "${CFG[18]}" ; then
     CFG[3]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if1: <${CFG[3]}> ip:${CFG[5]} w kontenerze <${CFG[18]}>"
+    msg "Przypisano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[18]}${BCK}>"
   fi
 fi
 return 0
@@ -946,7 +896,7 @@ set_if2r2() {
 if [[ -z ${CFG[4]} ]] ; then
   if freeinterface "${CFG[19]}" ; then
     CFG[4]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if2: <${CFG[4]}> ip:${CFG[6]} w kontenerze <${CFG[19]}>"
+    msg "Przypisano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[19]}${BCK}>"
   fi
 fi
 return 0
@@ -957,7 +907,7 @@ set_if3() {
 if [[ -z ${CFG[25]} ]] ; then
   if freeinterface "${CFG[0]}" ; then
     CFG[25]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if3: <${CFG[25]}> ip:${CFG[23]} w kontenerze <${CFG[0]}>"
+    msg "Przypisano nazwę interfejsu -if3: <${G}${CFG[25]}${BCK}> ip:<${G}${CFG[23]}${BCK}> w kontenerze <${G}${CFG[0]}${BCK}>"
   fi
 fi
 return 0
@@ -968,7 +918,7 @@ set_if4() {
 if [[ -z ${CFG[26]} ]] ; then
   if freeinterface "${CFG[0]}" ; then
     CFG[26]=$IFNAME
-    msg "Przypisano nazwę interfejsu -if4: <${CFG[26]}> ip:${CFG[24]} w kontenerze <${CFG[0]}>"
+    msg "Przypisano nazwę interfejsu -if4: <${G}${CFG[26]}${BCK}> ip:<${G}${CFG[24]}${BCK}> w kontenerze <${G}${CFG[0]}${BCK}>"
   fi
 fi
 return 0
@@ -989,8 +939,8 @@ crt_r1() {
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
     return
   fi
-  msg "Router Quagga w kontenerze ${CFG[18]} jest już w systemie"
-  msg "Skonfigurowany zostanie dodatkowy interfejs w ${CFG[18]} z adresem ${CFG[5]}"
+  msg "Router Quagga w kontenerze ${Y}${CFG[18]} jest już w systemie${BCK}"
+  msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[18]}${BCK} z adresem ${Y}${CFG[5]}${BCK}"
 }
 
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
@@ -1002,8 +952,8 @@ crt_r2() {
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
     return
   fi
-  msg "Router Quagga w kontenerze ${CFG[19]} jest już w systemie"
-  msg "Skonfigurowany zostanie dodatkowy interfejs w ${CFG[19]} z adresem ${CFG[6]}"
+  msg "Router Quagga w kontenerze ${Y}${CFG[19]} jest już w systemie${BCK}"
+  msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[19]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
 }
 
 
@@ -1094,7 +1044,7 @@ crt_linkif4sw2() {
 # ----  z zachowaniem zadanych parametrów transmisji
 crt_brinqos() {
   msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący intefejsy ${CFG[25]} oraz ${CFG[26]}"
-  msg "Adres ip ${CFG[0]} to ${CFG[23]}.  Adres ip ${CFG[24]} zostaje zwolniony."
+  msg "Adres ip ${G}${CFG[0]}${BCK} to ${G}${CFG[23]}${BCK}.  Adres ip ${G}${CFG[24]}${BCK} zostaje ${G}wolny${BCK}."
   ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
   ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
   ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
@@ -1107,7 +1057,9 @@ crt_brinqos() {
 }
 
 set_link() {
-  msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
+  msg "Kofiguracja parametrów łącza: Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
+  msg ".                        Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
+  msg "Sumaryczne:   Pasmo ${G}${CFG[34]}${BCK}  opóźnienie ${G}${CFG[36]}${BCK} utrata pakietów ${G}${CFG[35]}${BCK} duplikowanie ${G}${CFG[37]}${BCK}"
 
   ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
   ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
@@ -1121,15 +1073,13 @@ set_link() {
     else
       BUF=${BUF}:${CFG[$CNT]}
     fi
-#    echo "Parametr CFG[${CNT}] =  ${CFG[$CNT]}"
   done
-#  echo "### $MAXCFG $BUF ###"
   echo $BUF > buffor_cfg.dat
   docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
 }
 
 
-upgarde_link() {
+upgrade_link() {
   rm -f buffor_cfg.dat
   docker cp ${CFG[0]}:/buffor_cfg.dat buffor_cfg.dat
   CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
@@ -1163,11 +1113,34 @@ upgarde_link() {
   if [[ -n ${CFG[29]} ]] ; then
     CFG2[29]=${CFG[29]}
   fi
-  msg "Kofiguracja parametrów łącza: Pasmo ${CFG[9]}/${CFG[10]} z opóżnieniem ${CFG[13]}/${CFG[14]}"
-  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
-  ANS=(`docker exec ${CFG[0]} tc qdisc change dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+  if [[ -n ${CFG[34]} ]] ; then
+    CFG2[34]=${CFG[34]}
+  else
+    CFG2[34]=""
+  fi
+  if [[ -n ${CFG[35]} ]] ; then
+    CFG2[35]=${CFG[35]}
+  else
+    CFG2[35]=""
+  fi
+  if [[ -n ${CFG[36]} ]] ; then
+    CFG2[36]=${CFG[36]}
+  else
+    CFG2[36]=""
+  fi
+  if [[ -n ${CFG[37]} ]] ; then
+    CFG2[37]=${CFG[37]}
+  else
+    CFG2[37]=""
+  fi
+  msg "Zmiana parametrów łącza:"
+  msg "Pasmo ${G}${CFG2[9]}/${CFG2[10]}${BCK} z opóżnieniem ${G}${CFG2[13]}/${CFG2[14]}${BCK}"
+  msg "Utrata pakietów ${G}${CFG2[11]}/${CFG2[12]}${BCK}  duplikowanie ${G}${CFG2[28]}/${CFG2[29]}${BCK}"
+  msg "Sumaryczne: Pasmo ${G}${CFG2[34]}${BCK}  opóźnienie ${G}${CFG2[36]}${BCK} utrata pakietów ${G}${CFG2[35]}${BCK} duplikowanie ${G}${CFG2[37]}${BCK}"
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1:0 tbf rate ${CFG2[9]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1:0 tbf rate ${CFG2[10]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1:1 handle 10:0 netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1:1 handle 10:0 netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
 
   BUF=""
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
@@ -1184,7 +1157,47 @@ upgarde_link() {
 return
 }
 
+# Sprawdzenie poprawności parametru -band
+# We -  -band
+# Wy -  Zmienne ANS1 i ANS2
+# ---------------------------------------
+chk_band() {
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])\.?[0-9][0-9]*[MmKk]bit$"`)
+  ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])bit$"`)
+  if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
+    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+  fi
+  return
+}
 
+# Sprawdzenie poprawności parametru -loss
+# We -  -loss
+# Wy -  Zmienne ANS1 i ANS2
+#----------------------------------------
+chk_loss() {
+  ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
+  ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
+  if [[ -n $ANS1 || -n $ANS2 ]] ; then
+    : # :
+  else
+    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+  fi
+  return
+}
+
+# Sprawdzenie poprawności parametru -delay
+# We -  -delay
+# Wy -  Zmienna ANS1
+#----------------------------------------
+chk_loss() {
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])ms$"`)
+  if  [[ -n $ANS1 ]] ; then
+    : # :
+  else
+    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+  fi
+  return
+}
 
 del_container() {
   if [[ "${CFG[27]}" = "deldefaultnamecnt" ]] ; then
@@ -1208,8 +1221,8 @@ checklink() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skryptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2)
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic)
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -1328,7 +1341,7 @@ chk_crt_img_qoslink
 #  echo "CFG[$CNT] = ${CFG[$CNT]} " 
 #done
 
-# set -x 
+ set -x 
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
@@ -1340,7 +1353,7 @@ if [[ -z ${CFG[9]} && ! ${CFG[20]} ]] ; then
 else
 # W przeciwnym wypadku sprawdzamy jego poprawność 
   if [[ -n ${CFG[9]} ]] ; then
-    msg "Parser BAND1"
+    chk_band 9			# Podaje pozycję parametru z tablicy WSK[] <=> -band1
   fi
 fi
 
@@ -1349,7 +1362,7 @@ if [[ -z ${CFG[10]} && ! ${CFG[20]} ]] ; then
   CFG[10]="100Mbit"
 else
   if [[ -n ${CFG[10]} ]] ; then
-    msg "Parser BAND2"
+    chk_band 10
   fi
 fi
 
@@ -1358,7 +1371,7 @@ if [[ -z ${CFG[11]} && ! ${CFG[20]} ]] ; then
   CFG[11]="0%"
 else
   if [[ -n ${CFG[11]} ]] ; then
-    msg "Parser LOSS1"
+    chk_loss 11
   fi
 fi
 
@@ -1367,7 +1380,7 @@ if [[ -z ${CFG[12]} && ! ${CFG[20]} ]] ; then
   CFG[12]="0%"
 else
   if [[ -n ${CFG[12]} ]] ; then
-    msg "Parser LOSS2"
+    chk_loss 12
   fi
 fi
 
@@ -1376,7 +1389,7 @@ if [[ -z ${CFG[13]} && ! ${CFG[20]} ]] ; then
   CFG[13]="0ms"
 else
   if [[ -n ${CFG[13]} ]] ; then
-    msg "Parser DELAY1"
+    chk_delay 13
   fi
 fi
 
@@ -1385,7 +1398,7 @@ if [[ -z ${CFG[14]} && ! ${CFG[20]} ]] ; then
   CFG[14]="0ms"
 else
   if [[ -n ${CFG[14]} ]] ; then
-    msg "Parser DELAY2"
+    chk_delay 14
   fi
 fi
 
@@ -1407,6 +1420,52 @@ else
   fi
 fi
 
+set +e
+
+# ----  Weryfikacja parametru pasma - BAND		# łącze symetryczne
+if [[ -n ${CFG[34]} ]] ; then
+  msg "Parser BAND"
+  chk_band 34
+  if [[ -n $ANS1 || -n $ANS2 ]] ; then
+    CFG[9]=${CFG[34]}
+    CFG[10]=${CFG[34]} 
+  else
+    die 60 "Niepoprawny format parametru -band"
+  fi
+fi
+
+# ----  Weryfikacja parametru duplicowania - LOSS
+if [[ -n ${CFG[35]} ]] ; then
+  chk_loss 35
+  if [[ -n $ANS1 ]] ; then
+    LOSS=(`echo ${CFG[35]} | awk -F% '{print $1}'`)
+    LOSS=(`echo "scale=2; 100-$LOSS" | bc `)
+    LOSS=$(echo "scale=2; sqrt($LOSS)" | bc)
+    LOSS=$(echo "scale=2; (10-$LOSS)*10" | bc)
+  fi
+  if [[ -n $ANS2 ]] ; then
+    let LOSS=${CFG[35]}/2
+  fi
+  CFG[11]=${LOSS}%
+  CFG[12]=${LOSS}%
+fi
+
+
+# ----  Weryfikacja parametru duplicowania - DELAY
+if [[ -n ${CFG[36]} ]] ; then
+  chk_delay 36
+  DELAY=(`echo ${CFG[36]} | awk -Fm '{print $1}'`)
+  let CFG[11]=$DELAY/2
+  let CFG[12]=$DELAY/2
+fi
+
+# ----  Weryfikacja parametru duplicowania - DUPLIC
+if [[ -n ${CFG[37]} ]] ; then
+  msg "Parser DELAY"
+fi
+
+set +x
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  do zrobienia  !!!!!!!!!!!!!!!
 # ----  Weryfikacja nazwy łącza - LINK
 if [[ -n ${CFG[15]} && ! ${CFG[20]} ]] ; then
@@ -1416,7 +1475,6 @@ if [[ -n ${CFG[15]} && ! ${CFG[20]} ]] ; then
 fi
 
 # -----  Aktualizacja parametrów łącza QOSLINK -----
-set -x
 if [[ ${CFG[20]} ]] ; then
   if [[ -n ${CFG[0]} ]] ; then
     if checkcontainer "${CFG[0]}" ; then
@@ -1428,8 +1486,6 @@ if [[ ${CFG[20]} ]] ; then
     die 50 "Nie podano nazwy kontenera -c"
   fi  
 fi
-set +x
-
 
 # -----  Weryfikacja nazwy kontenera  -------
 if [[ -n ${CFG[0]} ]] ; then
@@ -1506,12 +1562,14 @@ if [[ -n ${CFG[26]} ]] ; then
   fi
 fi
 
+set -x
 # ----  Weryfikacja poprawności IP1
 if [[ -n ${CFG[5]} ]] ; then
   if ! parseip ${CFG[5]}  ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
+set +x
 
 # ----  Weryfikacja poprawności IP2
 if [[ -n ${CFG[6]} ]] ; then
