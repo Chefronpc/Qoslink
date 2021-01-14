@@ -12,13 +12,15 @@ QUAGGAPREFIX="quaggalink"
 QUAGGAMAX=256
 IFPREFIX="eth"
 IFMAX=64
-DEFAULTNET="10.0.0.0/28" # Domyślny adres sieci. Obsluga pełnego zakresu adresacji sieci
+DEFAULTNET="10.0.0.0/24" # Domyślny adres sieci. Obsluga pełnego zakresu adresacji sieci
 
 R="\e[31m"  # Kolory komunikatów
 Y="\e[33m"
 G="\e[32m"
 B="\e[34m"
 BCK="\e[0m"   # powrót do stadanrdowego zestawu kolorów terminala
+
+NEWROUTER=0
 
 # Komentarze i błędy
 # ------------------------------
@@ -937,10 +939,12 @@ crt_r1() {
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
-    return
+    NEWROUTER="new"	# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
+    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[18]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[18]}${BCK} z adresem ${Y}${CFG[5]}${BCK}"
+  NEWROUTER="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
@@ -950,10 +954,12 @@ crt_r2() {
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
-    return
+    NEWROUTER=0		# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
+    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[19]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[19]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
+  NEWROUTER=1		# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 
@@ -1000,7 +1006,7 @@ crt_linkif1r1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
@@ -1008,7 +1014,13 @@ crt_linkif1r1() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+  if [[ "$NEWROUTER" = "new" ]] ; then
+    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    echo "New router"
+  else
+    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    echo "Add interface to router"
+  fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
 
@@ -1016,7 +1028,7 @@ crt_linkif2r2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
@@ -1024,7 +1036,13 @@ crt_linkif2r2() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+  if [[ "$NEWROUTER" = "new" ]] ; then
+    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    echo "New router"
+  else
+    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    echo "Add interface to router"
+  fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
 }
 
@@ -1043,7 +1061,7 @@ crt_linkif4sw2() {
 # ----  umożliwia przekazywanie pakietów poprzez kontener <qoslinkxx>
 # ----  z zachowaniem zadanych parametrów transmisji
 crt_brinqos() {
-  msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący intefejsy ${CFG[25]} oraz ${CFG[26]}"
+  msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący interfejsy ${CFG[25]} oraz ${CFG[26]}"
   msg "Adres ip ${G}${CFG[0]}${BCK} to ${G}${CFG[23]}${BCK}.  Adres ip ${G}${CFG[24]}${BCK} zostaje ${G}wolny${BCK}."
   ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
   ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
@@ -1057,9 +1075,10 @@ crt_brinqos() {
 }
 
 set_link() {
-  msg "Kofiguracja parametrów łącza: Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
-  msg ".                        Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
-  msg "Sumaryczne:   Pasmo ${G}${CFG[34]}${BCK}  opóźnienie ${G}${CFG[36]}${BCK} utrata pakietów ${G}${CFG[35]}${BCK} duplikowanie ${G}${CFG[37]}${BCK}"
+  msg "Kofiguracja parametrów łącza:"
+  msg "Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
+  msg "Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
+  msg "Sumaryczne:  Pasmo ${G}${CFG[34]}${BCK}  opóźnienie ${G}${CFG[36]}${BCK} utrata pakietów ${G}${CFG[35]}${BCK} duplikowanie ${G}${CFG[37]}${BCK}"
 
   ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
   ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
@@ -1087,7 +1106,7 @@ upgrade_link() {
     if [[ ${CFG2[$CNT]} == "_" ]] ; then
       CFG2[$CNT]=""
     fi
-    echo "CFG2[$CNT]=${CFG2[$CNT]}"
+#    echo "CFG2[$CNT]=${CFG2[$CNT]}"
   done
   if [[ -n ${CFG[9]} ]] ; then
     CFG2[9]=${CFG[9]}
@@ -1162,7 +1181,7 @@ return
 # Wy -  Zmienne ANS1 i ANS2
 # ---------------------------------------
 chk_band() {
-  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])\.?[0-9][0-9]*[MmKk]bit$"`)
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.?[0-9][0-9]*)?[MmKk]bit$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])bit$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
@@ -1177,9 +1196,7 @@ chk_band() {
 chk_loss() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
-  if [[ -n $ANS1 || -n $ANS2 ]] ; then
-    : # :
-  else
+  if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
@@ -1189,11 +1206,22 @@ chk_loss() {
 # We -  -delay
 # Wy -  Zmienna ANS1
 #----------------------------------------
-chk_loss() {
+chk_delay() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])ms$"`)
-  if  [[ -n $ANS1 ]] ; then
-    : # :
-  else
+  if ! [[ -n $ANS1 ]] ; then
+    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+  fi
+  return
+}
+
+# Sprawdzenie poprawności parametru -duplic
+# e -  -duplic
+# Wy -  Zmienne ANS1 i ANS2
+#----------------------------------------
+chk_duplic() {
+  ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
+  ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
+  if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
@@ -1341,8 +1369,6 @@ chk_crt_img_qoslink
 #  echo "CFG[$CNT] = ${CFG[$CNT]} " 
 #done
 
- set -x 
-
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # -----------------------------------------------------
 
@@ -1407,7 +1433,7 @@ if [[ -z ${CFG[28]} && ! ${CFG[20]} ]] ; then
   CFG[28]="0%"
 else
   if [[ -n ${CFG[28]} ]] ; then
-    msg "Parser DUPLIC1"
+    chk_duplic 28
   fi
 fi
 
@@ -1416,13 +1442,12 @@ if [[ -z ${CFG[29]} && ! ${CFG[20]} ]] ; then
   CFG[29]="0%"
 else
   if [[ -n ${CFG[29]} ]] ; then
-    msg "Parser DUPLIC2"
+    chk_duplic 28
   fi
 fi
 
-set +e
-
-# ----  Weryfikacja parametru pasma - BAND		# łącze symetryczne
+# ----  Weryfikacja parametru pasma - BAND
+# łącze symetryczne
 if [[ -n ${CFG[34]} ]] ; then
   msg "Parser BAND"
   chk_band 34
@@ -1434,7 +1459,9 @@ if [[ -n ${CFG[34]} ]] ; then
   fi
 fi
 
-# ----  Weryfikacja parametru duplicowania - LOSS
+# ----  Weryfikacja parametru duplicowania - LOSS 
+# Oblicza wartość -loss dla obu kierunków, aby otrzymać 
+# wypadkowe prawdopodobieństwo utraty wg zadanej wartości.
 if [[ -n ${CFG[35]} ]] ; then
   chk_loss 35
   if [[ -n $ANS1 ]] ; then
@@ -1442,29 +1469,47 @@ if [[ -n ${CFG[35]} ]] ; then
     LOSS=(`echo "scale=2; 100-$LOSS" | bc `)
     LOSS=$(echo "scale=2; sqrt($LOSS)" | bc)
     LOSS=$(echo "scale=2; (10-$LOSS)*10" | bc)
+    CFG[11]=${LOSS}%
+    CFG[12]=${LOSS}%
   fi
   if [[ -n $ANS2 ]] ; then
     let LOSS=${CFG[35]}/2
+    CFG[11]=${LOSS}
+    CFG[12]=${LOSS}
   fi
-  CFG[11]=${LOSS}%
-  CFG[12]=${LOSS}%
 fi
 
-
-# ----  Weryfikacja parametru duplicowania - DELAY
+# ----  Weryfikacja parametru opóźnienia - DELAY
+# Sumaryczne opóźnienie podzielone na oba kierunki
 if [[ -n ${CFG[36]} ]] ; then
   chk_delay 36
   DELAY=(`echo ${CFG[36]} | awk -Fm '{print $1}'`)
-  let CFG[11]=$DELAY/2
-  let CFG[12]=$DELAY/2
+  let CFG[13]=$DELAY/2
+  let CFG[14]=$DELAY/2
+  CFG[13]=${CFG[13]}ms
+  CFG[14]=${CFG[14]}ms
 fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC
+# Oblicza wartość -duplic dla obu kierunków, aby otrzymać 
+# wypadkowe prawdopodobieństwo powtarzania wg zadanej wartości.
 if [[ -n ${CFG[37]} ]] ; then
-  msg "Parser DELAY"
+  chk_duplic 37
+  if [[ -n $ANS1 ]] ; then
+    DUPLIC=(`echo ${CFG[37]} | awk -F% '{print $1}'`)
+    DUPLIC=(`echo "scale=2; 100-$DUPLIC" | bc `)
+    DUPLIC=$(echo "scale=2; sqrt($DUPLIC)" | bc)
+    DUPLIC=$(echo "scale=2; (10-$DUPLIC)*10" | bc)
+    CFG[28]=${DUPLIC}%
+    CFG[29]=${DUPLIC}%
+  fi
+  if [[ -n $ANS2 ]] ; then
+    let DUPLIC=${CFG[37]}/2
+    CFG[28]=${DUPLIC}
+    CFG[29]=${DUPLIC}
+  fi
 fi
 
-set +x
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  do zrobienia  !!!!!!!!!!!!!!!
 # ----  Weryfikacja nazwy łącza - LINK
@@ -1485,6 +1530,8 @@ if [[ ${CFG[20]} ]] ; then
   else
     die 50 "Nie podano nazwy kontenera -c"
   fi  
+  msg "Gotowe."
+  exit 0
 fi
 
 # -----  Weryfikacja nazwy kontenera  -------
