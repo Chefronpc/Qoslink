@@ -1152,6 +1152,7 @@ upgrade_link() {
   else
     CFG2[37]=""
   fi
+
   msg "Zmiana parametrów łącza:"
   msg "Pasmo ${G}${CFG2[9]}/${CFG2[10]}${BCK} z opóżnieniem ${G}${CFG2[13]}/${CFG2[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG2[11]}/${CFG2[12]}${BCK}  duplikowanie ${G}${CFG2[28]}/${CFG2[29]}${BCK}"
@@ -1168,9 +1169,7 @@ upgrade_link() {
     else
       BUF=${BUF}:${CFG2[$CNT]}
     fi
-  msg2 "Parametr CFG2[${CNT}] =  ${CFG2[$CNT]}"
   done
-  msg2 "### $MAXCFG $BUF ###"
   echo $BUF > buffor_cfg.dat
   docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
 return
@@ -1181,7 +1180,7 @@ return
 # Wy -  Zmienne ANS1 i ANS2
 # ---------------------------------------
 chk_band() {
-  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.?[0-9][0-9]*)?[MmKk]bit$"`)
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?[MmKk]bit$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])bit$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
@@ -1207,8 +1206,9 @@ chk_loss() {
 # Wy -  Zmienna ANS1
 #----------------------------------------
 chk_delay() {
-  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])ms$"`)
-  if ! [[ -n $ANS1 ]] ; then
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?ms$"`)
+  ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])ms$"`)
+  if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
@@ -1233,8 +1233,75 @@ del_container() {
   fi
 }
 
+# Lista typów łączy
+# ------------------
+LINK=(10Base 100Base ADSL3/8 ISDN SDI)  
+
+#  Konfiguruje komplet parametrów łącza
+#  -band -loss -delay -duplic
+#  według podanego typu z listy
+# We - $1 Parametr -link $CFG[15]
+# -------------------------------------
 checklink() {
-: # :
+case "$1" in
+  "10Base")
+    CFG[9]=10Mbit   ; CFG[10]=10Mbit
+    CFG[11]=0%      ; CFG[12]=0%
+    CFG[13]=0.3ms   ; CFG[14]=0.3ms
+    CFG[28]=0.001%  ; CFG[29]=0.001% 
+    ;;
+  "100Base")
+    CFG[9]=100Mbit  ; CFG[10]=100Mbit
+    CFG[11]=0%      ; CFG[12]=0%
+    CFG[13]=0.2ms   ; CFG[14]=0.2ms
+    CFG[28]=0.002%  ; CFG[29]=0.002%
+    ;;
+  "ADSL3/8")
+    CFG[9]=3Mbit    ; CFG[10]=8Mbit
+    CFG[11]=0.08%   ; CFG[12]=0.08%
+    CFG[13]=2.4ms   ; CFG[14]=2.4ms
+    CFG[28]=0.01%   ; CFG[29]=0.01%
+    ;;
+  "ISDNBRI")
+    CFG[9]=128kbit  ; CFG[10]=128kbit
+    CFG[11]=0.02%   ; CFG[12]=0.02%
+    CFG[13]=2ms     ; CFG[14]=2ms
+    CFG[28]=0.01%   ; CFG[29]=0.01%
+    ;;
+  "SDI")
+    CFG[9]=115kbit  ; CFG[10]=115kbit
+    CFG[11]=0.3%    ; CFG[12]=0.3%
+    CFG[13]=2ms     ; CFG[14]=2ms
+    CFG[28]=0.2%    ; CFG[29]=0.2%
+    ;;
+  "802.11b")
+    CFG[9]=6Mbit    ; CFG[10]=6Mbit
+    CFG[11]=1.7%    ; CFG[12]=1.7%
+    CFG[13]=0.9ms   ; CFG[14]=0.9ms
+    CFG[28]=0.2%    ; CFG[29]=0.2%
+    ;;
+  "802.11a")
+    CFG[9]=25Mbit   ; CFG[10]=25Mbit
+    CFG[11]=2%      ; CFG[12]=2%
+    CFG[13]=0.6ms   ; CFG[14]=0.6ms
+    CFG[28]=0.3%    ; CFG[29]=0.3%
+    ;;
+  "802.11g")
+    CFG[9]=25Mbit   ; CFG[10]=25Mbit
+    CFG[11]=1.2%    ; CFG[12]=1.2%
+    CFG[13]=0.9ms   ; CFG[14]=0.9ms
+    CFG[28]=0.5%    ; CFG[29]=0.5%
+    ;;
+  "802.11n")
+    CFG[9]=65Mbit   ; CFG[10]=65Mbit
+    CFG[11]=1.2%    ; CFG[12]=1.2%
+    CFG[13]=0.9ms   ; CFG[14]=0.9ms
+    CFG[28]=0.5%    ; CFG[29]=0.5%
+    ;;
+  *) die 58 "Nieprawdłowy parametr -link"
+     return 1
+esac
+return 0
 }
 
 
@@ -1449,7 +1516,6 @@ fi
 # ----  Weryfikacja parametru pasma - BAND
 # łącze symetryczne
 if [[ -n ${CFG[34]} ]] ; then
-  msg "Parser BAND"
   chk_band 34
   if [[ -n $ANS1 || -n $ANS2 ]] ; then
     CFG[9]=${CFG[34]}
@@ -1464,7 +1530,7 @@ fi
 # wypadkowe prawdopodobieństwo utraty wg zadanej wartości.
 if [[ -n ${CFG[35]} ]] ; then
   chk_loss 35
-  if [[ -n $ANS1 ]] ; then
+  if [[ -n $ANS1 ]] ; then      # Podawana wartość procentowa
     LOSS=(`echo ${CFG[35]} | awk -F% '{print $1}'`)
     LOSS=(`echo "scale=2; 100-$LOSS" | bc `)
     LOSS=$(echo "scale=2; sqrt($LOSS)" | bc)
@@ -1472,7 +1538,7 @@ if [[ -n ${CFG[35]} ]] ; then
     CFG[11]=${LOSS}%
     CFG[12]=${LOSS}%
   fi
-  if [[ -n $ANS2 ]] ; then
+  if [[ -n $ANS2 ]] ; then	# Podawan3 wg ilości pakietów
     let LOSS=${CFG[35]}/2
     CFG[11]=${LOSS}
     CFG[12]=${LOSS}
@@ -1483,11 +1549,10 @@ fi
 # Sumaryczne opóźnienie podzielone na oba kierunki
 if [[ -n ${CFG[36]} ]] ; then
   chk_delay 36
-  DELAY=(`echo ${CFG[36]} | awk -Fm '{print $1}'`)
-  let CFG[13]=$DELAY/2
-  let CFG[14]=$DELAY/2
+  DELAY=`echo ${CFG[36]} | awk -Fm '{print $1}'`
+  CFG[13]=`echo "scale=2; $DELAY/2" | bc `
   CFG[13]=${CFG[13]}ms
-  CFG[14]=${CFG[14]}ms
+  CFG[14]=${CFG[13]}
 fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC
@@ -1513,7 +1578,7 @@ fi
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  do zrobienia  !!!!!!!!!!!!!!!
 # ----  Weryfikacja nazwy łącza - LINK
-if [[ -n ${CFG[15]} && ! ${CFG[20]} ]] ; then
+if [[ -n ${CFG[15]} ]] ; then
   if ! checklink ${CFG[15]}  ; then
     die 8 "Niepoprawna nazwa łącza"
   fi
@@ -1609,14 +1674,13 @@ if [[ -n ${CFG[26]} ]] ; then
   fi
 fi
 
-set -x
+
 # ----  Weryfikacja poprawności IP1
 if [[ -n ${CFG[5]} ]] ; then
   if ! parseip ${CFG[5]}  ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
-set +x
 
 # ----  Weryfikacja poprawności IP2
 if [[ -n ${CFG[6]} ]] ; then
@@ -1637,7 +1701,6 @@ fi
 #for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
 #  echo "CFG[$CNT] -eq ${CFG[$CNT]} " 
 #done
-
 
 # ------  Określenie rodzaju polaczenia (Host-Host, Host-Switch, Host-Router, Switch-Router, itp)
 # -----------------------------------------------------------------------------------------------
