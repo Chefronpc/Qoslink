@@ -18,6 +18,12 @@ R="\e[31m"  # Kolory komunikatów
 Y="\e[33m"
 G="\e[32m"
 B="\e[34m"
+BLK="\e[30m"
+RB="\e[31;1m"  # pogrubione
+YB="\e[33;1m"
+GB="\e[32;1m"
+BB="\e[34;1m"
+BLKB="\e[30;1m"
 BCK="\e[0m"   # powrót do stadanrdowego zestawu kolorów terminala
 
 NEWROUTER=0
@@ -1126,6 +1132,9 @@ upgrade_link() {
   if [[ -n ${CFG[14]} ]] ; then
     CFG2[14]=${CFG[14]}
   fi
+  if [[ -n ${CFG[15]} ]] ; then
+    CFG2[15]=${CFG[15]}
+  fi
   if [[ -n ${CFG[28]} ]] ; then
     CFG2[28]=${CFG[28]}
   fi
@@ -1227,12 +1236,6 @@ chk_duplic() {
   return
 }
 
-del_container() {
-  if [[ "${CFG[27]}" = "deldefaultnamecnt" ]] ; then
-   : # :
-  fi
-}
-
 # Lista typów łączy
 # ------------------
 LINK=(10Base 100Base ADSL3/8 ISDN SDI)  
@@ -1248,13 +1251,13 @@ case "$1" in
     CFG[9]=10Mbit   ; CFG[10]=10Mbit
     CFG[11]=0%      ; CFG[12]=0%
     CFG[13]=0.3ms   ; CFG[14]=0.3ms
-    CFG[28]=0.001%  ; CFG[29]=0.001% 
+    CFG[28]=0.01%  ; CFG[29]=0.01% 
     ;;
   "100Base")
     CFG[9]=100Mbit  ; CFG[10]=100Mbit
     CFG[11]=0%      ; CFG[12]=0%
     CFG[13]=0.2ms   ; CFG[14]=0.2ms
-    CFG[28]=0.002%  ; CFG[29]=0.002%
+    CFG[28]=0.01%  ; CFG[29]=0.01%
     ;;
   "ADSL3/8")
     CFG[9]=3Mbit    ; CFG[10]=8Mbit
@@ -1298,10 +1301,101 @@ case "$1" in
     CFG[13]=0.9ms   ; CFG[14]=0.9ms
     CFG[28]=0.5%    ; CFG[29]=0.5%
     ;;
-  *) die 58 "Nieprawdłowy parametr -link"
+  ".")
+    : # :
+    ;;
+  *) die 58 "Nieprawidłowy parametr -link"
      return 1
 esac
 return 0
+}
+
+prn_container() {
+  if [[ "${CFG[38]}" = "printallcnt" ]] ; then
+   : # :
+  else
+    CONTAINERRUN=` docker ps | grep " $1\$" `
+    CONTAINERALL=` docker ps -a | grep " $1\$" `
+    if [[ -z $CONTAINERRUN && -z $CONTAINERALL ]] ; then	# Brak kontenera
+      die 60 "Brak kontenera <${CFG[38]}> do wyświetlenia"
+    else
+      if [[ -z $CONTAINERRUN && -n $CONTAINERALL ]] ; then	# Kontener zatrzyman
+        die 61 "Podany kontener <${CFG[38]}> jest zatrzymany"
+      else
+        if [[ -n $CONTAINERRUN && -n $CONTAINERALL ]] ; then	# Kontener uruchomiony 
+      #    msg "\nKontener ${YB}${CFG[38]}${BCK}:"
+          msg ""
+          rm -f buffor_cfg.dat		
+          docker cp ${CFG[38]}:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
+          if [[ ! -e "buffor_cfg.dat" ]] ; then
+            die 63 "Podany kontener nie jest typu <qoslink>, nie zawiera informacji o stanie łącza"
+          fi
+          CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
+          for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+            if [[ ${CFG2[$CNT]} == "_" ]] ; then
+              CFG2[$CNT]=""
+            fi
+            #echo "CFG2[$CNT]=${CFG2[$CNT]}"
+          done
+							          # Ustalenie rodzaju połączenia
+          if [[ -n ${CFG2[1]} && -z ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+            TYPESIDE1="host"
+            DEVSIDE1="-h1:${GB}${CFG2[1]}${BCK}"
+          fi
+          if [[ -z ${CFG2[1]} && -n ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+            TYPESIDE1="switch"
+            DEVSIDE1="-sw1:${GB}${CFG2[16]}${BCK}"
+            CFG2[3]="${BLK}----${BCK}"
+            CFG2[5]="${BLK}---------------${BCK}"
+          fi
+          if [[ -z ${CFG2[1]} && -z ${CFG2[16]} && -n ${CFG2[18]} ]] ; then
+            TYPESIDE1="router"
+            DEVSIDE1="-r1:${GB}${CFG2[18]}${BCK}"
+          fi
+          if [[ -n ${CFG2[2]} && -z ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+            TYPESIDE2="host"
+            DEVSIDE2="-h2:${GB}${CFG2[2]}${BCK}"
+          fi
+          if [[ -z ${CFG2[2]} && -n ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+            TYPESIDE2="switch"
+            DEVSIDE2="-sw2:${GB}${CFG2[17]}${BCK}"
+            CFG2[4]="${BLK}----${BCK}"
+            CFG2[6]="${BLK}---------------${BCK}"
+          fi
+          if [[ -z ${CFG2[2]} && -z ${CFG2[17]} && -n ${CFG2[19]} ]] ; then
+            TYPESIDE2="router"
+            DEVSIDE2="-r2:${GB}${CFG2[19]}${BCK}"
+          fi
+          #msg "Połączenie pomiędzy ${DEVSIDE1} a ${DEVSIDE2}" 
+          msg "${TYPESIDE1} \t\t\t \t\t \t\t\t ${TYPESIDE2}"
+          msg "${DEVSIDE1} \t\t\t -c:${B}${CFG2[0]}${BCK} \t\t\t ${DEVSIDE2}" 
+          msg "-if1:${CFG2[3]} \t\t\t -link:${CFG2[15]} \t\t\t -if2:${CFG2[4]}"
+          msg "-ip1:${GB}${CFG2[5]}${BCK} \t\t -ip3:${CFG2[23]} \t\t -ip2:${GB}${CFG2[6]}${BCK}"
+          msg "-gw1:${CFG2[30]} \t\t \t\t \t\t -gw2:${CFG2[31]}"
+          msg "\t-band1  \t\t${G}${CFG2[9]}${BCK}\t-->\t<--  ${G}${CFG2[10]}${BCK}\t-band2"
+          msg "\t-loss1  \t\t${G}${CFG2[11]}${BCK}\t-->\t<--  ${G}${CFG2[12]}${BCK}\t-loss2"
+          msg "\t-delay1 \t${G}${CFG2[13]}${BCK}\t-->\t<--  ${G}${CFG2[14]}${BCK}\t-delay2"
+          msg "\t-duplic1\t${G}${CFG2[28]}${BCK}\t-->\t<--  ${G}${CFG2[29]}${BCK}\t-duplic2"
+          msg ""
+          msg "Sumaryczne:"
+          msg "\t\t\t-band\t${G}${CFG2[34]}${BCK}"
+          msg "\t\t\t-loss\t${G}${CFG2[35]}${BCK}"
+          msg "\t\t\t-delay\t${G}${CFG2[36]}${BCK}"
+          msg "\t\t\t-duplic\t${G}${CFG2[37]}${BCK}"
+          msg "----------------------------------------------------------------------------"
+        else
+          die 62 "Błąd w odczycie statusu kontenera"
+        fi
+      fi 	
+    fi
+  fi
+  return
+}
+
+del_container() {
+  if [[ "${CFG[27]}" = "deldefaultnamecnt" ]] ; then
+   : # :
+  fi
 }
 
 
@@ -1315,9 +1409,9 @@ return 0
 #             skrypcie pipework autorstwa ............... udostępnionego na licencji ......
 # ---------------------------------------------------------------------------------------------
 #
-#   Tablica z dostępnymi opcjami oraz parametrami wejściowymi dla skryptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic)
+#   Tablica z dostępnymi opcjami i parametrami wejściowymi dla skryptu
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38)
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P)
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -1409,6 +1503,16 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         fi
       fi
 
+      if [ ${PARAM[$CNT]} = "-P" ] ; then		# Wyświetlenie parametrów wszystkich
+        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
+          if [[ "$TMP" = "-" ]] ; then
+            CFG[$CNT2]="printallcnt"
+          fi
+        else
+          CFG[$CNT2]="printallcnt"
+        fi
+      fi
+
       if [ ${PARAM[$CNT]} = "-U" ] ; then		# Aktualizacja danych 
         CFG[$CNT2]=0
       fi
@@ -1461,7 +1565,7 @@ fi
 
 # ----  Weryfikacja parametru utraty pakietów - LOSS1
 if [[ -z ${CFG[11]} && ! ${CFG[20]} ]] ; then
-  CFG[11]="0%"
+  CFG[11]="0.01%"
 else
   if [[ -n ${CFG[11]} ]] ; then
     chk_loss 11
@@ -1470,7 +1574,7 @@ fi
 
 # ----  Weryfikacja parametru utraty pakietów - LOSS2
 if [[ -z ${CFG[12]} && ! ${CFG[20]} ]] ; then
-  CFG[12]="0%"
+  CFG[12]="0.01%"
 else
   if [[ -n ${CFG[12]} ]] ; then
     chk_loss 12
@@ -1479,7 +1583,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY1
 if [[ -z ${CFG[13]} && ! ${CFG[20]} ]] ; then
-  CFG[13]="0ms"
+  CFG[13]="0.12ms"
 else
   if [[ -n ${CFG[13]} ]] ; then
     chk_delay 13
@@ -1488,7 +1592,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY2
 if [[ -z ${CFG[14]} && ! ${CFG[20]} ]] ; then
-  CFG[14]="0ms"
+  CFG[14]="0.12ms"
 else
   if [[ -n ${CFG[14]} ]] ; then
     chk_delay 14
@@ -1497,7 +1601,7 @@ fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC1
 if [[ -z ${CFG[28]} && ! ${CFG[20]} ]] ; then
-  CFG[28]="0%"
+  CFG[28]="0.01%"
 else
   if [[ -n ${CFG[28]} ]] ; then
     chk_duplic 28
@@ -1506,7 +1610,7 @@ fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC2
 if [[ -z ${CFG[29]} && ! ${CFG[20]} ]] ; then
-  CFG[29]="0%"
+  CFG[29]="0.01%"
 else
   if [[ -n ${CFG[29]} ]] ; then
     chk_duplic 28
@@ -1519,7 +1623,8 @@ if [[ -n ${CFG[34]} ]] ; then
   chk_band 34
   if [[ -n $ANS1 || -n $ANS2 ]] ; then
     CFG[9]=${CFG[34]}
-    CFG[10]=${CFG[34]} 
+    CFG[10]=${CFG[34]}
+    CFG[15]="."
   else
     die 60 "Niepoprawny format parametru -band"
   fi
@@ -1537,11 +1642,13 @@ if [[ -n ${CFG[35]} ]] ; then
     LOSS=$(echo "scale=2; (10-$LOSS)*10" | bc)
     CFG[11]=${LOSS}%
     CFG[12]=${LOSS}%
+    CFG[15]="." 
   fi
   if [[ -n $ANS2 ]] ; then	# Podawan3 wg ilości pakietów
     let LOSS=${CFG[35]}/2
     CFG[11]=${LOSS}
     CFG[12]=${LOSS}
+    CFG[15]="." 
   fi
 fi
 
@@ -1553,6 +1660,7 @@ if [[ -n ${CFG[36]} ]] ; then
   CFG[13]=`echo "scale=2; $DELAY/2" | bc `
   CFG[13]=${CFG[13]}ms
   CFG[14]=${CFG[13]}
+  CFG[15]="." 
 fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC
@@ -1567,35 +1675,50 @@ if [[ -n ${CFG[37]} ]] ; then
     DUPLIC=$(echo "scale=2; (10-$DUPLIC)*10" | bc)
     CFG[28]=${DUPLIC}%
     CFG[29]=${DUPLIC}%
+    CFG[15]="." 
   fi
   if [[ -n $ANS2 ]] ; then
     let DUPLIC=${CFG[37]}/2
     CFG[28]=${DUPLIC}
     CFG[29]=${DUPLIC}
-  fi
-fi
-
-
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  do zrobienia  !!!!!!!!!!!!!!!
-# ----  Weryfikacja nazwy łącza - LINK
-if [[ -n ${CFG[15]} ]] ; then
-  if ! checklink ${CFG[15]}  ; then
-    die 8 "Niepoprawna nazwa łącza"
+    CFG[15]="." 
   fi
 fi
 
 # -----  Aktualizacja parametrów łącza QOSLINK -----
-if [[ ${CFG[20]} ]] ; then
-  if [[ -n ${CFG[0]} ]] ; then
-    if checkcontainer "${CFG[0]}" ; then
+if [[ ${CFG[20]} ]] ; then			# Wybrana funkcja aktualizacji
+  if [[ -n ${CFG[15]} ]] ; then			# Sprawdzenie poprawności
+    if ! checklink ${CFG[15]}  ; then		# i wczytanie parametrów łącza
+      die 8 "Niepoprawna nazwa łącza"
+    fi
+  fi
+  if [[ -n ${CFG[0]} ]] ; then			# Aktualizacja wg podanego 
+    if checkcontainer "${CFG[0]}" ; then	# kontenera qoslink
       upgrade_link
+      msg "Gotowe."
+      exit 0
     else
       die 51 "Brak kontenera o podanej nazwie: ${CFG[0]}"
     fi
-  else
-    die 50 "Nie podano nazwy kontenera -c"
   fi  
-  msg "Gotowe."
+
+  # ---------------------------------------------------------                aktualizacja po adresie IP !!!!!!!!!!
+  # Do zrobienia
+ 
+  msg "Nie podano nazwy kontenera -c <qoslink> lub adresu -ip ."
+  exit 1
+fi
+
+# ----  Wyświetlenie parametrów łącza <qoslink>
+if [[ -n ${CFG[38]} ]] ; then
+  prn_container "${CFG[38]}"
+  exit 0
+fi
+
+# ----  Usuwanie kontenerów
+if [[ -n ${CFG[27]} ]] ; then
+  del_container "${CFG[27]}"
+  echo "Funkcja do zaprogramowania"
   exit 0
 fi
 
@@ -1662,15 +1785,15 @@ fi
 
 # -----  Weryfikacja interfejsu  IF3  -----
 if [[ -n ${CFG[25]} ]] ; then
-  if checkinterface "${CFG[25]}" "${CFG[1]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if3 ${CFG[25]} jest już utworzona w kontenerze ${CFG[1]}"
+  if checkinterface "${CFG[25]}" "${CFG[0]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if3 ${CFG[25]} jest już utworzona w kontenerze ${CFG[0]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF4  -----
 if [[ -n ${CFG[26]} ]] ; then
-  if checkinterface "${CFG[26]}" "${CFG[2]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if4 ${CFG[26]} jest już utworzona w kontenerze ${CFG[2]}"
+  if checkinterface "${CFG[26]}" "${CFG[0]}" ; then
+    die 5 "Nazwa interfejsu z opcji -if4 ${CFG[26]} jest już utworzona w kontenerze ${CFG[0]}"
   fi
 fi
 
@@ -1687,13 +1810,6 @@ if [[ -n ${CFG[6]} ]] ; then
   if ! parseip ${CFG[6]}  ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
-fi
-
-# ----  Usuwanie kontenerów
-if [[ -n ${CFG[27]} ]] ; then
-  del_container
-  echo "Funkcja do zaprogramowania"
-  exit
 fi
 
 # Podgląd tablicy z parametrami
