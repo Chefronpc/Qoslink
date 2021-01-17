@@ -412,69 +412,6 @@ comparenet() {
   die 20 "Bład w funkcji comparenet()"
 }
 
-
-# Sprawdza dostępnosc parametrów sieci we wszystkich kontenerze
-# We - $1 IP/Netmask
-# ------------------------------------
-checkipall() {
-  msg "Weryfikacja adresu IP $1 we wszystkich kontenerach" 
-  if parseip "$1" ; then
-    # Sprawdza czy IP jest adresem sieci czy broadcastem 
-    comparenet "$1" "0.0.0.0"
-    if [[ "${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1" == "$1" ]] ; then
-      die 25 "Adres IP $1 nie może byc adresem sieci."
-    fi
-    if [[ "${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.${BROADCAST1[3]}/$M1" == "$1" ]] ; then
-      die 26 "Adres IP $1 nie może być adresem broadcast."
-    fi
-
-    STAT=1				# Domyslnie IP jest poza adresacja sieci w testowanym kontenerze
-    LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
-    for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
-      msg2 "="  # rem
-      msg2 "============= ${Y} kontener  ${LISTCONTAINER[$CNT2]} ${BCK} ===================" # rem
-      LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
-      let LISTIPMAX=${#LISTIP[@]}
-      for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
-  
-     #   if [[ "$1" = "${LISTIP[$CNT]}" ]] ; then
-     #     die 15 "Konflikt adresów IP $1 w kontenerze ${LISTCONTAINER[$CNT2]}"
-     #     return 		# Podane IP jest w konflikcie z IP w danym kontenerze
-     #   fi
-        comparenet "$1" "${LISTIP[$CNT]}"
-        case "$NET" in
-          "3")
-            msg2 "check case - podsieci zgodne - bez konfliktu"
-            if [[ "$STAT" -lt "4" ]] ; then 
-              STAT=3
-            fi ;;
-          "2")
-            msg2 "check case - podsieci rózne"
-            if [[ "$STAT" -lt "3" ]] ; then
-              STAT=2
-            fi ;;
-          "1")
-            msg2 "check case - rozne dlugosci maski"
-            if [[ "$STAT" -lt "2" ]] ; then
-              STAT=1
-            fi ;;
-          "0")
-            msg2 "check case - konflikt adresow"
-             tmp=$1; tmp2=${LISTCONTAINER[$CNT2]}
-             msg "${R}Wykryto konflikt adresów ...${BCK}"
-             freeip $1
-             die 15 "Konflikt adresów IP $tmp w kontenerze $tmp2." "${BCK}Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: ${G}$NEWIP${BCK}"
-            ;;
-        esac
-      done
-    done
-    msg "Brak konfliku dla adresu ${G}$1${BCK}"
-    return
-  elseif
-    die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
-  fi
-}
-
 # Zwraca wolny adres IP dla sieci zgodnej z zadanym IP
 # uwzgledniajac konfiguracje IP wszystkich kontenerow
 # ----------------------------------------------------
@@ -627,6 +564,68 @@ freeip() {
  return 0
 }
 
+# Sprawdza dostępnosc parametrów sieci we wszystkich kontenerach
+# We - $1 IP/Netmask
+# ------------------------------------
+checkipall() {
+  msg "Weryfikacja adresu IP $1 we wszystkich kontenerach" 
+  if parseip "$1" ; then
+    # Sprawdza czy IP jest adresem sieci czy broadcastem 
+    comparenet "$1" "0.0.0.0"
+    NET11="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+    if [[ "$NET11" == "$1" ]] ; then
+      die 64 "Adres IP $1 nie może być adresem sieci."
+    fi
+    if [[ "${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.${BROADCAST1[3]}/$M1" == "$1" ]] ; then
+      die 26 "Adres IP $1 nie może być adresem broadcast."
+    fi
+
+    STAT=1				# Domyslnie IP jest poza adresacja sieci w testowanym kontenerze
+    LISTCONTAINER=(`docker ps | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+    for (( CNT2=0; CNT2<${#LISTCONTAINER[@]}; CNT2++ )) ; do
+      msg2 "="  # rem
+      msg2 "============= ${Y} kontener  ${LISTCONTAINER[$CNT2]} ${BCK} ===================" # rem
+      LISTIP=(`docker exec ${LISTCONTAINER[$CNT2]} ip a | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+      let LISTIPMAX=${#LISTIP[@]}
+      for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
+  
+     #   if [[ "$1" = "${LISTIP[$CNT]}" ]] ; then
+     #     die 15 "Konflikt adresów IP $1 w kontenerze ${LISTCONTAINER[$CNT2]}"
+     #     return 		# Podane IP jest w konflikcie z IP w danym kontenerze
+     #   fi
+        comparenet "$1" "${LISTIP[$CNT]}"
+        case "$NET" in
+          "3")
+            msg2 "check case - podsieci zgodne - bez konfliktu"
+            if [[ "$STAT" -lt "4" ]] ; then 
+              STAT=3
+            fi ;;
+          "2")
+            msg2 "check case - podsieci rózne"
+            if [[ "$STAT" -lt "3" ]] ; then
+              STAT=2
+            fi ;;
+          "1")
+            msg2 "check case - rozne dlugosci maski"
+            if [[ "$STAT" -lt "2" ]] ; then
+              STAT=1
+            fi ;;
+          "0")
+            msg2 "check case - konflikt adresow"
+             tmp=$1; tmp2=${LISTCONTAINER[$CNT2]}
+             msg "${R}Wykryto konflikt adresów ...${BCK}"
+             freeip $1
+             die 15 "Konflikt adresów IP $tmp w kontenerze $tmp2." "${BCK}Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: ${G}$NEWIP${BCK}"
+            ;;
+        esac
+      done
+    done
+    msg "Brak konfliku dla adresu ${G}$1${BCK}"
+    return
+  elseif
+    die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
+  fi
+}
 
 # Zwraca adres nowej podsieci uwzgledniajac konfiguracje IP wszystkich kontenerow
 # -------------------------------------------------------------------------------
@@ -787,8 +786,8 @@ freenet() {
  return 0
 }
 
-
-
+# ---- Uzupełnianie brakujących parametrów
+# ----------------------------------------------
 # ---- Przypisanie nazwy dla kontenera <c>
 set_c() {
 if [[ -z ${CFG[0]} ]] ; then
@@ -932,6 +931,8 @@ fi
 return 0
 }
 
+# -----  Tworzenie kontenerów qoslink oraz quaggalink
+# -----------------------------------------------------
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
   ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add All chefronpc/qoslink:v1 /bin/bash `)
@@ -965,11 +966,13 @@ crt_r2() {
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[19]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[19]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
-  NEWROUTER=1		# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
+  NEWROUTER=1		# Jeżeli już był uruchomiony -> znacznik umozliwiający
+			# pozostawienie istniejącego ID-routera
 }
 
 
 # -----  Tworzenie połączen pomiędzy bridgem a kontenerem
+# -------------------------------------------------------------
 crt_linkif1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
   if [[ -n ${CFG[30]} ]] ; then
@@ -1310,86 +1313,108 @@ esac
 return 0
 }
 
-prn_container() {
-  if [[ "${CFG[38]}" = "printallcnt" ]] ; then
-   : # :
-  else
-    CONTAINERRUN=` docker ps | grep " $1\$" `
-    CONTAINERALL=` docker ps -a | grep " $1\$" `
-    if [[ -z $CONTAINERRUN && -z $CONTAINERALL ]] ; then	# Brak kontenera
-      die 60 "Brak kontenera <${CFG[38]}> do wyświetlenia"
-    else
-      if [[ -z $CONTAINERRUN && -n $CONTAINERALL ]] ; then	# Kontener zatrzyman
-        die 61 "Podany kontener <${CFG[38]}> jest zatrzymany"
-      else
-        if [[ -n $CONTAINERRUN && -n $CONTAINERALL ]] ; then	# Kontener uruchomiony 
-      #    msg "\nKontener ${YB}${CFG[38]}${BCK}:"
-          msg ""
-          rm -f buffor_cfg.dat		
-          docker cp ${CFG[38]}:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
-          if [[ ! -e "buffor_cfg.dat" ]] ; then
-            die 63 "Podany kontener nie jest typu <qoslink>, nie zawiera informacji o stanie łącza"
-          fi
-          CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
-          for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-            if [[ ${CFG2[$CNT]} == "_" ]] ; then
-              CFG2[$CNT]=""
-            fi
-            #echo "CFG2[$CNT]=${CFG2[$CNT]}"
-          done
-							          # Ustalenie rodzaju połączenia
-          if [[ -n ${CFG2[1]} && -z ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
-            TYPESIDE1="host"
-            DEVSIDE1="-h1:${GB}${CFG2[1]}${BCK}"
-          fi
-          if [[ -z ${CFG2[1]} && -n ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
-            TYPESIDE1="switch"
-            DEVSIDE1="-sw1:${GB}${CFG2[16]}${BCK}"
-            CFG2[3]="${BLK}----${BCK}"
-            CFG2[5]="${BLK}---------------${BCK}"
-          fi
-          if [[ -z ${CFG2[1]} && -z ${CFG2[16]} && -n ${CFG2[18]} ]] ; then
-            TYPESIDE1="router"
-            DEVSIDE1="-r1:${GB}${CFG2[18]}${BCK}"
-          fi
-          if [[ -n ${CFG2[2]} && -z ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
-            TYPESIDE2="host"
-            DEVSIDE2="-h2:${GB}${CFG2[2]}${BCK}"
-          fi
-          if [[ -z ${CFG2[2]} && -n ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
-            TYPESIDE2="switch"
-            DEVSIDE2="-sw2:${GB}${CFG2[17]}${BCK}"
-            CFG2[4]="${BLK}----${BCK}"
-            CFG2[6]="${BLK}---------------${BCK}"
-          fi
-          if [[ -z ${CFG2[2]} && -z ${CFG2[17]} && -n ${CFG2[19]} ]] ; then
-            TYPESIDE2="router"
-            DEVSIDE2="-r2:${GB}${CFG2[19]}${BCK}"
-          fi
-          #msg "Połączenie pomiędzy ${DEVSIDE1} a ${DEVSIDE2}" 
-          msg "${TYPESIDE1} \t\t\t \t\t \t\t\t ${TYPESIDE2}"
-          msg "${DEVSIDE1} \t\t\t -c:${B}${CFG2[0]}${BCK} \t\t\t ${DEVSIDE2}" 
-          msg "-if1:${CFG2[3]} \t\t\t -link:${CFG2[15]} \t\t\t -if2:${CFG2[4]}"
-          msg "-ip1:${GB}${CFG2[5]}${BCK} \t\t -ip3:${CFG2[23]} \t\t -ip2:${GB}${CFG2[6]}${BCK}"
-          msg "-gw1:${CFG2[30]} \t\t \t\t \t\t -gw2:${CFG2[31]}"
-          msg "\t-band1  \t\t${G}${CFG2[9]}${BCK}\t-->\t<--  ${G}${CFG2[10]}${BCK}\t-band2"
-          msg "\t-loss1  \t\t${G}${CFG2[11]}${BCK}\t-->\t<--  ${G}${CFG2[12]}${BCK}\t-loss2"
-          msg "\t-delay1 \t${G}${CFG2[13]}${BCK}\t-->\t<--  ${G}${CFG2[14]}${BCK}\t-delay2"
-          msg "\t-duplic1\t${G}${CFG2[28]}${BCK}\t-->\t<--  ${G}${CFG2[29]}${BCK}\t-duplic2"
-          msg ""
-          msg "Sumaryczne:"
-          msg "\t\t\t-band\t${G}${CFG2[34]}${BCK}"
-          msg "\t\t\t-loss\t${G}${CFG2[35]}${BCK}"
-          msg "\t\t\t-delay\t${G}${CFG2[36]}${BCK}"
-          msg "\t\t\t-duplic\t${G}${CFG2[37]}${BCK}"
-          msg "----------------------------------------------------------------------------"
-        else
-          die 62 "Błąd w odczycie statusu kontenera"
-        fi
-      fi 	
-    fi
+read_dsp_cnt() {
+  msg ""
+  rm -f buffor_cfg.dat		
+  docker cp $1:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
+  if [[ ! -e "buffor_cfg.dat" ]] ; then
+    die 63 "Podany kontener nie jest typu <qoslink>, nie zawiera informacji o stanie łącza"
   fi
-  return
+  CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
+  for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
+    if [[ ${CFG2[$CNT]} == "_" ]] ; then
+      CFG2[$CNT]=""
+    fi
+    #echo "CFG2[$CNT]=${CFG2[$CNT]}"
+  done
+          # Ustalenie rodzaju połączenia
+  if [[ -n ${CFG2[1]} && -z ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+    TYPESIDE1="host"
+    DEVSIDE1="-h1:${GB}${CFG2[1]}${BCK}"
+  fi
+  if [[ -z ${CFG2[1]} && -n ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+    TYPESIDE1="switch"
+    DEVSIDE1="-sw1:${GB}${CFG2[16]}${BCK}"
+    CFG2[3]="${BLK}----${BCK}"
+    CFG2[5]="${BLK}---------------${BCK}"
+  fi
+  if [[ -z ${CFG2[1]} && -z ${CFG2[16]} && -n ${CFG2[18]} ]] ; then
+    TYPESIDE1="router"
+    DEVSIDE1="-r1:${GB}${CFG2[18]}${BCK}"
+  fi
+  if [[ -n ${CFG2[2]} && -z ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+    TYPESIDE2="host"
+    DEVSIDE2="-h2:${GB}${CFG2[2]}${BCK}"
+  fi
+  if [[ -z ${CFG2[2]} && -n ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+    TYPESIDE2="switch"
+    DEVSIDE2="-sw2:${GB}${CFG2[17]}${BCK}"
+    CFG2[4]="${BLK}----${BCK}"
+    CFG2[6]="${BLK}---------------${BCK}"
+  fi
+  if [[ -z ${CFG2[2]} && -z ${CFG2[17]} && -n ${CFG2[19]} ]] ; then
+    TYPESIDE2="router"
+    DEVSIDE2="-r2:${GB}${CFG2[19]}${BCK}"
+  fi
+  if [[ -z ${CFG2[30]} ]] ; then
+    CFG2[30]="${BLK}--------------${BCK}"
+  fi
+  if [[ -z ${CFG2[31]} ]] ; then
+    CFG2[31]="${BLK}--------------${BCK}"
+  fi
+  M=(`echo ${CFG2[23]} | awk -F/ '{print $2}' `)	# odczyt adresu sieci na podstawie IP qoslink'a
+  N=(` ipcalc ${CFG2[23]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  NM="${N[0]}.${N[1]}.${N[2]}.${N[3]}/$M"
+  #msg "Połączenie pomiędzy ${DEVSIDE1} a ${DEVSIDE2}" 
+  msg "${TYPESIDE1} \t\t\t \t\t \t\t\t ${TYPESIDE2}"
+  msg "${DEVSIDE1} \t\t\t -c:${Y}${CFG2[0]}${BCK} \t\t\t ${DEVSIDE2}" 
+  msg "-if1:${CFG2[3]} \t\t\t -link:${CFG2[15]} \t\t\t -if2:${CFG2[4]}"
+  msg "-ip1:${GB}${CFG2[5]}${BCK} \t\t -ip3:${CFG2[23]} \t\t -ip2:${GB}${CFG2[6]}${BCK}"
+  msg "-gw1:${CFG2[30]} \t\tnetwork ${NM}\t\t -gw2:${CFG2[31]}"
+#  msg "-gw1:${CFG2[30]} \t\t \t\t \t\t -gw2:${CFG2[31]}"
+  msg "\t-band1  \t\t${G}${CFG2[9]}${BCK}\t-->\t<--  ${G}${CFG2[10]}${BCK}\t-band2"
+  msg "\t-loss1  \t\t${G}${CFG2[11]}${BCK}\t-->\t<--  ${G}${CFG2[12]}${BCK}\t-loss2"
+  msg "\t-delay1 \t${G}${CFG2[13]}${BCK}\t-->\t<--  ${G}${CFG2[14]}${BCK}\t-delay2"
+  msg "\t-duplic1\t${G}${CFG2[28]}${BCK}\t-->\t<--  ${G}${CFG2[29]}${BCK}\t-duplic2"
+  msg ""
+  msg "Sumaryczne:"
+  msg "\t\t\t-band\t${G}${CFG2[34]}${BCK}"
+  msg "\t\t\t-loss\t${G}${CFG2[35]}${BCK}"
+  msg "\t\t\t-delay\t${G}${CFG2[36]}${BCK}"
+  msg "\t\t\t-duplic\t${G}${CFG2[37]}${BCK}"
+  msg "----------------------------------------------------------------------------"
+}
+
+prn_container() {
+  ANS=(`docker ps -a | grep $1`)
+  if [[ -n $ANS ]] ; then
+    CONTAINERLINK=(` docker inspect $1 | grep /qoslink: `)
+    CONTAINERRUN=(` docker inspect $1 | grep -E "Running.*true" `)
+    if [[ ! -n $CONTAINERRUN ]] ; then	# Kontener zatrzyman
+      die 61 "Podany kontener <$1> jest zatrzymany"
+
+    elif [[ -n $CONTAINERLINK ]] ; then	# Kontener typu qoslink
+      read_dsp_cnt $1
+
+    else
+      die 62 "Podany kontener $1 nie zawiera informacji o parametrach łącza"
+    fi
+  else
+    die 60 "Brak podanego kontenera $1"
+  fi
+}
+
+prn_allcontainer() {
+
+  LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
+  let CNTMAX=${#LISTCONTAINER[14]*2}
+  for (( i=0; i<$CNTMAX; i=i+2 )) ; do
+    ANS=(`echo ${LISTCONTAINER[$i]} | grep /qoslink: `)
+    if [[ -n $ANS ]] ; then
+      read_dsp_cnt ${LISTCONTAINER[$i+1]}
+    fi
+  done
+
 }
 
 del_container() {
@@ -1711,7 +1736,12 @@ fi
 
 # ----  Wyświetlenie parametrów łącza <qoslink>
 if [[ -n ${CFG[38]} ]] ; then
-  prn_container "${CFG[38]}"
+  CFG[21]="0"			# włącza wyświetlanie komunikatów pomimo  braku opcji -v
+  if [[ "${CFG[38]}" = "printallcnt" ]] ; then	
+    prn_allcontainer
+  else
+    prn_container "${CFG[38]}"
+  fi
   exit 0
 fi
 
@@ -2500,3 +2530,7 @@ esac
 
 echo Gotowe
 exit 0
+#        M=`echo $1 | awk -F/ '{print $2}' `	# odczyt adresu sieci na podstawie IP qoslink'a
+#        NET=` ipcalc $1 -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `
+#        NET="${NET[0]}.${NET[1]}.${NET[2]}.${NET[3]}/$M"
+#        msg "-gw1:${CFG2[30]} \t\t ${NET}\t\t -gw2:${CFG2[31]}"
