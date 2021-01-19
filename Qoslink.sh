@@ -179,14 +179,25 @@ chk_img_qoslink() {
 # We - $1 nazwa bridga
 # --------------------------
 checkbridge() {
-  LISTBRIDGE=(`nmcli d | awk '{ print $1 }'`)
-#  LISTBRIDGE=(`nmcli d | grep $BRPREFIX[[:digit:]] | awk '{ print $1 }'`)
-  for (( CNT=0; CNT<${#LISTBRIDGE[@]}; CNT++ )) ; do
-    if [[ "$1" = "${LISTBRIDGE[$CNT]}" ]] ; then
-      return 0
+
+#  LISTALL=(`nmcli d | awk '{ print $1 }'`)
+  LISTALL=(`nmcli d | grep $1 `)
+#  ISBRIDGE=(`nmcli d | grep " bridge " | grep $1 | awk '{ print $1 }'`)
+  ISBRIDGE=(`nmcli d | grep " bridge " | grep $1`)
+  if [[ -n $LISTALL ]] ; then  
+    if [[ -n $ISBRIDGE ]] ; then 
+      die 66 "Bridge o nazwie $1 jest już utworzony w systemie."
+    else
+      die 67 "Podano nazwę bridga zajętą już przez inny interfejs w systemie."
     fi
-  done
-  return 1
+  else
+    if [[ -n $ISBRIDGE ]] ; then
+      return 0		# Nazwa bridga zajęta
+    else 			
+      return 1		# Podana nazwa bridga jest wolna w systemie
+    fi
+  fi
+  die 68 "Błąd w funkcji checkbridge"
 }
 
 # Zwraca numer pierwszego wolnego bridga
@@ -1109,7 +1120,7 @@ set_link() {
 
 upgrade_link() {
   rm -f buffor_cfg.dat
-  docker cp ${CFG[0]}:/buffor_cfg.dat buffor_cfg.dat
+  docker cp $1:/buffor_cfg.dat buffor_cfg.dat
   CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
     if [[ ${CFG2[$CNT]} == "_" ]] ; then
@@ -1183,8 +1194,8 @@ upgrade_link() {
     fi
   done
   echo $BUF > buffor_cfg.dat
-  docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
-return
+  docker cp buffor_cfg.dat $1:/buffor_cfg.dat
+  return
 }
 
 # Sprawdzenie poprawności parametru -band
@@ -1241,7 +1252,7 @@ chk_duplic() {
 
 # Lista typów łączy
 # ------------------
-LINK=(10Base 100Base ADSL3/8 ISDN SDI)  
+LINK=( 10Mbps 100Mbps 1Gbps ADSL3/8 ISDNBRI SDI 802.11b 802.11a 802.11g 802.11n )  
 
 #  Konfiguruje komplet parametrów łącza
 #  -band -loss -delay -duplic
@@ -1250,17 +1261,23 @@ LINK=(10Base 100Base ADSL3/8 ISDN SDI)
 # -------------------------------------
 checklink() {
 case "$1" in
-  "10Base")
+  "10Mbps")
     CFG[9]=10Mbit   ; CFG[10]=10Mbit
     CFG[11]=0%      ; CFG[12]=0%
     CFG[13]=0.3ms   ; CFG[14]=0.3ms
     CFG[28]=0.01%  ; CFG[29]=0.01% 
     ;;
-  "100Base")
+  "100Mbps")
     CFG[9]=100Mbit  ; CFG[10]=100Mbit
     CFG[11]=0%      ; CFG[12]=0%
     CFG[13]=0.2ms   ; CFG[14]=0.2ms
     CFG[28]=0.01%  ; CFG[29]=0.01%
+    ;;
+  "1Gbps")
+    CFG[9]=1000Mbit  ; CFG[10]=1000Mbit
+    CFG[11]=0.01%      ; CFG[12]=0.01%
+    CFG[13]=0.2ms   ; CFG[14]=0.2ms
+    CFG[28]=0.001%  ; CFG[29]=0.001%
     ;;
   "ADSL3/8")
     CFG[9]=3Mbit    ; CFG[10]=8Mbit
@@ -1272,13 +1289,13 @@ case "$1" in
     CFG[9]=128kbit  ; CFG[10]=128kbit
     CFG[11]=0.02%   ; CFG[12]=0.02%
     CFG[13]=2ms     ; CFG[14]=2ms
-    CFG[28]=0.01%   ; CFG[29]=0.01%
+    CFG[28]=0.05%   ; CFG[29]=0.05%
     ;;
   "SDI")
     CFG[9]=115kbit  ; CFG[10]=115kbit
     CFG[11]=0.3%    ; CFG[12]=0.3%
     CFG[13]=2ms     ; CFG[14]=2ms
-    CFG[28]=0.2%    ; CFG[29]=0.2%
+    CFG[28]=0.1%    ; CFG[29]=0.1%
     ;;
   "802.11b")
     CFG[9]=6Mbit    ; CFG[10]=6Mbit
@@ -1307,10 +1324,86 @@ case "$1" in
   ".")
     : # :
     ;;
-  *) die 58 "Nieprawidłowy parametr -link"
-     return 1
+  *)
+    for (( CNT=0; CNT<${#LINK[@]}; CNT++ )) ; do
+      message="$message   ${LINK[$CNT]}"
+    done
+    die 58 "Nieprawidłowy parametr -link \nDostępne: \n         $message"
 esac
 return 0
+}
+
+# -----  Aktualizacja parametrów łącza QOSLINK 
+# ----- Po nazwie kontenera Qoslink lub adresie IP interfejsu
+# ------------------------------------------------------------
+upgrade_container() {
+  STAT3="nie"					# Czy wykonano aktualizację
+  if [[ -n ${CFG[15]} ]] ; then			# Sprawdzenie poprawności
+    if ! checklink ${CFG[15]}  ; then		# i wczytanie parametrów łącza
+      die 8 "Niepoprawna nazwa łącza"
+    fi
+  fi
+  ANS=(`docker ps -a | grep ${CFG[20]}`)
+  if [[ -n $ANS ]] ; then
+    # ---  Aktualizacja po nazwie kontenera Qoslink
+    CONTAINERLINK=(` docker inspect ${CFG[20]} | grep /qoslink: `)
+    CONTAINERRUN=(` docker inspect ${CFG[20]} | grep -E "Running.*true" `)
+    if [[ ! -n $CONTAINERRUN ]] ; then			# Kontener zatrzyman
+      die 61 "Podany kontener <${CFG[20]}> jest zatrzymany"
+  
+    elif [[ -n $CONTAINERLINK ]] ; then			# Kontener typu qoslink
+      upgrade_link ${CFG[20]}
+      msg "Gotowe."
+      exit 0
+    else
+      die 62 "Podany kontener ${CFG[20]} nie zawiera informacji o parametrach łącza"
+    fi
+  else
+    # ---   Aktualizacja po adresie IP
+    LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
+    let CNTMAX=${#LISTCONTAINER[@]*2}
+    for (( CNT3=0; CNT3<$CNTMAX; CNT3=CNT3+2 )) ; do
+      ANS=(`echo ${LISTCONTAINER[$CNT3]} | grep /qoslink: `)
+      if [[ -n $ANS ]] ; then
+        rm -f buffor_cfg.dat
+        docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat   # Odczyt danych
+        if [[ ! -e "buffor_cfg.dat" ]] ; then
+          die 68 "Błąd w odczycie pliku konfiguracyjnego łącza"
+        fi
+        CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
+        for (( CNT4=0; CNT4<${#WSK[@]}; CNT4++ )) ; do
+          if [[ "${CFG2[$CNT4]}" = "_" ]] ; then
+            CFG2[$CNT4]=""
+          fi
+        done
+        # Aktualizacja łącza pomiędzy dwoma podanymi urządzeniami w opcji -U dev1:dev2
+        A0=(` echo ${CFG[20]} | grep ":" `)
+        A1=(` echo ${CFG[20]} | awk -F: '{print $1}'`)
+        A2=(` echo ${CFG[20]} | awk -F: '{print $2}'`)
+        if [[ -n $ANS ]] ; then
+          if [[ "$A1" = "${CFG2[1]}" || "$A1" = "${CFG2[2]}" || "$A1" = "${CFG2[16]}" || "$A1" = "${CFG2[17]}" || "$A1" = "${CFG2[18]}" || "$A1" = "${CFG2[19]}" || "$A1" = "${CFG2[32]}" || "$A1" = "${CFG2[33]}" ]] ; then
+            if [[ "$A2" = "${CFG2[1]}" || "$A2" = "${CFG2[2]}" || "$A2" = "${CFG2[16]}" || "$A2" = "${CFG2[17]}" || "$A2" = "${CFG2[18]}" || "$A2" = "${CFG2[19]}" || "$A2" = "${CFG2[32]}" || "$#A2" = "${CFG2[33]}" ]] ; then
+              STAT2="dev1:dev2"
+            fi
+          fi  
+        fi
+        if [[ "${CFG[20]}" = "${CFG2[5]}" || "${CFG[20]}" = "${CFG2[6]}" || "${CFG[20]}" = "allupgrade" || "$STAT2" = "dev1:dev2" ]] ; then
+          msg "${Y}Przed zmianą:${BCK}"
+          read_dsp_cnt ${CFG2[0]}
+          msg "${Y}Po zmianie:${BCK}"
+          upgrade_link ${CFG2[0]}
+          STAT3="tak"		#  Wykonano aktualizację
+          STAT2=""		#  Zerowanie znacznika STAT2, zapobiega aktualizacji
+        fi        		#  kolejnych przypadkowwych kontenerów.
+      fi
+    done
+  fi
+  if [[ "$STAT3" = "tak" ]] ; then
+    msg "Gotowe."
+  else
+    msg "${R}Brak kontenera/ów do aktualizacji ${BCK}"
+    exit 0
+  fi
 }
 
 read_dsp_cnt() {
@@ -1322,7 +1415,7 @@ read_dsp_cnt() {
   fi
   CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-    if [[ ${CFG2[$CNT]} == "_" ]] ; then
+    if [[ "${CFG2[$CNT]}" = "_" ]] ; then
       CFG2[$CNT]=""
     fi
     #echo "CFG2[$CNT]=${CFG2[$CNT]}"
@@ -1407,7 +1500,7 @@ prn_container() {
 prn_allcontainer() {
 
   LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
-  let CNTMAX=${#LISTCONTAINER[14]*2}
+  let CNTMAX=${#LISTCONTAINER[@]*2}
   for (( i=0; i<$CNTMAX; i=i+2 )) ; do
     ANS=(`echo ${LISTCONTAINER[$i]} | grep /qoslink: `)
     if [[ -n $ANS ]] ; then
@@ -1417,13 +1510,87 @@ prn_allcontainer() {
 
 }
 
+# ----- Kasowanie kontenerów 
+# ----- Po nazwie kontenera Qoslink lub adresie IP interfejsu
+# ------------------------------------------------------------
+
 del_container() {
-  if [[ "${CFG[27]}" = "deldefaultnamecnt" ]] ; then
-   : # :
+  ANS=(`docker ps -a | grep ${CFG[27]}`)
+  if [[ -n $ANS ]] ; then
+    # ---  Kasowanie po nazwie kontenera Qoslink
+    CONTAINERLINK=(` docker inspect ${CFG[27]} | grep qoslink: `)
+    CONTAINERQUAGGA=(` docker inspect ${CFG[27]} | grep quaggalink: `)
+    CONTAINERHOST=(` docker inspect ${CFG[27]} | grep host: `)
+       CONTAINERRUN=(` docker inspect ${CFG[27]} | grep -E "Running.*true" `)
+    if [[ ! -n $CONTAINERRUN ]] ; then			# Kontener zatrzyman
+      die 61 "Podany kontener <${CFG[27]}> jest zatrzymany"
+    elif [[ -n $CONTAINERLINK ]] ; then			# Kasowanie qoslink
+      msg "Usuwanie kontenera typu qoslink: "${G}${CFG[27]}${BCK}""
+    elif [[ -n $CONTAINERQUAGGA ]] ; then		# Kasowanie routera
+      msg "Usuwanie kontenera (routera) typu quaggalink: \"${G}${CFG[27]}${BCK}\""
+    else [[ -n $CONTAINERHOST ]] 			# Kasowanie hosta
+      msg "Usuwanie kontenera typu host: \"${G}${CFG[27]}${BCK}\""
+    fi
+    ANS=(`docker stop -t 0 ${CFG[27]}`)
+    ANS=(`docker rm ${CFG[27]}`) 
+    msg "Gotowe."
+    exit 0
+  elif [[ "${CFG[27]}" = "ALL" ]] ; then
+    LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
+    let CNTMAX=${#LISTCONTAINER[@]*2}
+    for (( CNT3=0; CNT3<$CNTMAX; CNT3=CNT3+2 )) ; do
+      ANS1=(`echo ${LISTCONTAINER[$CNT3]} | grep qoslink: `)
+      ANS2=(`echo ${LISTCONTAINER[$CNT3]} | grep quaggalink: `)
+      ANS3=(`echo ${LISTCONTAINER[$CNT3]} | grep host: `)
+      if [[ -n $ANS1 || -n $ANS2 || -n $ANS3 ]] ; then
+        msg "Usuwanie kontenera ${G}${LISTCONTAINER[$CNT3+1]}${BCK}"
+        ANS=(`docker stop -t 0 ${LISTCONTAINER[$CNT3+1]}`)
+        ANS=(`docker rm ${LISTCONTAINER[$CNT3+1]}`)
+      fi
+    done
+    msg "Gotowe"
+    exit 0    
+  else
+    # ---   Kasowanie po adresie IP
+    LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
+    let CNTMAX=${#LISTCONTAINER[@]*2}
+    for (( CNT3=0; CNT3<$CNTMAX; CNT3=CNT3+2 )) ; do
+      ANS=(`echo ${LISTCONTAINER[$CNT3]} | grep /qoslink: `)
+      if [[ -n $ANS ]] ; then
+        rm -f buffor_cfg.dat
+        docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat   # Odczyt danych
+        if [[ ! -e "buffor_cfg.dat" ]] ; then
+          die 68 "Błąd w odczycie pliku konfiguracyjnego łącza"
+        fi
+        CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
+        for (( CNT4=0; CNT4<${#WSK[@]}; CNT4++ )) ; do
+          if [[ "${CFG2[$CNT4]}" = "_" ]] ; then
+            CFG2[$CNT4]=""
+          fi
+        done
+        # Kasowanie łącza pomiędzy dwoma podanymi urządzeniami w opcji -D dev1:dev2
+        A0=(` echo ${CFG[27]} | grep ":" `)
+        A1=(` echo ${CFG[27]} | awk -F: '{print $1}'`)
+        A2=(` echo ${CFG[27]} | awk -F: '{print $2}'`)
+        if [[ -n $ANS ]] ; then
+          if [[ "$A1" = "${CFG2[1]}" || "$A1" = "${CFG2[2]}" || "$A1" = "${CFG2[16]}" || "$A1" = "${CFG2[17]}" || "$A1" = "${CFG2[18]}" || "$A1" = "${CFG2[19]}" || "$A1" = "${CFG2[32]}" || "$A1" = "${CFG2[33]}" ]] ; then
+            if [[ "$A2" = "${CFG2[1]}" || "$A2" = "${CFG2[2]}" || "$A2" = "${CFG2[16]}" || "$A2" = "${CFG2[17]}" || "$A2" = "${CFG2[18]}" || "$A2" = "${CFG2[19]}" || "$A2" = "${CFG2[32]}" || "$#A2" = "${CFG2[33]}" ]] ; then
+              STAT2="dev1:dev2"
+            fi
+          fi  
+        fi
+        if [[ "${CFG[27]}" = "${CFG2[5]}" || "${CFG[27]}" = "${CFG2[6]}" || "${CFG[27]}" = "deldefaultnamecnt" || "$STAT2" = "dev1:dev2" ]] ; then
+          msg "Usuwanie kontenera typu qoslink: "${G}${CFG2[0]}${BCK}""
+          ANS=(`docker stop -t 0 ${CFG2[0]}`)
+          ANS=(`docker rm ${CFG2[0]}`)
+          STAT2=""
+        fi        
+      fi
+    done
   fi
+  msg "Gotowe"
+  exit 0
 }
-
-
 
 # ---------------------------------------------------------------------------------------------
 #   QoSLink - skrypt symulujący sieć IP składającą się z łączy, switchy oraz routerów 
@@ -1435,8 +1602,8 @@ del_container() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami i parametrami wejściowymi dla skryptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38)
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P)
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L )
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -1451,8 +1618,10 @@ done
 # Uporządkowanie parametrów z tablicy PARAM[] do CFG[] według pozycji w WSK[].
 # ----------------------------------------------------------------------------
 for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
+  STAT=0				# Znacznik zatrzymujący sort w przypadku nieznanej opcji
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
     if [ ${PARAM[$CNT]} = ${WSK[$CNT2]} ] ; then
+      STAT=1
       CFG[$CNT2]=${PARAM[$CNT+1]}
       CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru 
       CFGNEXT=${CFGNEXT:0:1}		# "-" lub pusty ciąg oznacza brak argumentu 
@@ -1520,7 +1689,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
 
       if [ ${PARAM[$CNT]} = "-D" ] ; then		# Usuwanie wszystkich
         if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
-          if [[ "$TMP" = "-" ]] ; then
+          if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="deldefaultnamecnt"
           fi
         else
@@ -1530,7 +1699,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
 
       if [ ${PARAM[$CNT]} = "-P" ] ; then		# Wyświetlenie parametrów wszystkich
         if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
-          if [[ "$TMP" = "-" ]] ; then
+          if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="printallcnt"
           fi
         else
@@ -1538,8 +1707,14 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-U" ] ; then		# Aktualizacja danych 
-        CFG[$CNT2]=0
+      if [ ${PARAM[$CNT]} = "-U" ] ; then		# Upgrade wszystkich
+        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
+          if [[ "$CFGNEXT" = "-" ]] ; then
+            CFG[$CNT2]="allupgrade"
+          fi
+        else
+          CFG[$CNT2]="allupgrade"
+        fi
       fi
 
       if [ ${PARAM[$CNT]} = "-v" ] ; then		# Wyswietlanie komunikatow
@@ -1552,6 +1727,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
 
     fi
   done
+  CFGIT=${PARAM[$CNT]}	# Weryfikacja poprawności nazwy opcji
+  CFGIT=${CFGIT:0:1}	# Jeżeli jest z "-" i nie ma w tablicy WSK[] => błąd	
+  if [[ "$STAT" = "0" && "$CFGIT" = "-" ]] ; then
+    die 69 "Podano nieprawidłową opcję : ${PARAM[$CNT]}"
+  fi
 done
 
 # Sprawdzenie i ewentualne utworzenie obrazów kontenerów Quaggalink i Qoslink
@@ -1710,28 +1890,19 @@ if [[ -n ${CFG[37]} ]] ; then
   fi
 fi
 
-# -----  Aktualizacja parametrów łącza QOSLINK -----
-if [[ ${CFG[20]} ]] ; then			# Wybrana funkcja aktualizacji
-  if [[ -n ${CFG[15]} ]] ; then			# Sprawdzenie poprawności
-    if ! checklink ${CFG[15]}  ; then		# i wczytanie parametrów łącza
-      die 8 "Niepoprawna nazwa łącza"
-    fi
-  fi
-  if [[ -n ${CFG[0]} ]] ; then			# Aktualizacja wg podanego 
-    if checkcontainer "${CFG[0]}" ; then	# kontenera qoslink
-      upgrade_link
-      msg "Gotowe."
-      exit 0
-    else
-      die 51 "Brak kontenera o podanej nazwie: ${CFG[0]}"
-    fi
-  fi  
+# ----- Weryfikacja nazwy łącza  -link
+# ----- Gdy poprawne, aktualizuje poszczgólne parametry łącza
+# -----------------------------------------
+if [[ -n ${CFG[15]} ]] ; then
+  checklink ${CFG[15]}
+fi
 
-  # ---------------------------------------------------------                aktualizacja po adresie IP !!!!!!!!!!
-  # Do zrobienia
- 
-  msg "Nie podano nazwy kontenera -c <qoslink> lub adresu -ip ."
-  exit 1
+# -----  Aktualizacja parametrów łącza QOSLINK 
+# ----- Po nazwie kontenera Qoslink lub adresie IP interfejsu
+# ------------------------------------------------------------
+if [[ -n ${CFG[20]} ]] ; then			# Wybrana funkcja aktualizacji
+  upgrade_container
+  exit 0
 fi
 
 # ----  Wyświetlenie parametrów łącza <qoslink>
@@ -1747,8 +1918,7 @@ fi
 
 # ----  Usuwanie kontenerów
 if [[ -n ${CFG[27]} ]] ; then
-  del_container "${CFG[27]}"
-  echo "Funkcja do zaprogramowania"
+  del_container
   exit 0
 fi
 
@@ -2518,8 +2688,7 @@ case "$KOD" in
 
 
 *)
-    echo "Nieprawidłowe zestawienie parametrów."
-    exit 0 ;;  
+    die 80 "${R}Nieprawidłowe zestawienie parametrów.${BCK}"    
 esac
 
 # Podgląd tablicy z parametrami
