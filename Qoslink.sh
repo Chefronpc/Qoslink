@@ -19,19 +19,19 @@ FILEMAX=1024
 DEFAULTNET="10.0.0.0/24"   # Domyślny adres sieci. Obsluga pełnego zakresu adresacji 
 			   # Zakres obsługiwanej maski <2,29>	
 
-R="\e[31m"  # Kolory komunikatów
+R="\e[31m"  		# Kolory komunikatów
 Y="\e[33m"
 G="\e[32m"
 B="\e[34m"
 BLK="\e[30m"
-RB="\e[31;1m"  # pogrubione
+RB="\e[31;1m"  		# pogrubione
 YB="\e[33;1m"
 GB="\e[32;1m"
 BB="\e[34;1m"
 BLKB="\e[30;1m"
-BCK="\e[0m"   # powrót do stadanrdowego zestawu kolorów terminala
+BCK="\e[0m"   		# powrót do stadanrdowego zestawu kolorów terminala
 
-NEWROUTER=0
+NEWROUTER=0		
 
 # Komentarze i błędy
 # ------------------------------
@@ -62,12 +62,12 @@ die () {
 }
 
 crt_dockerfile_qoslink() {
-  rm -Rf ./dockerfiles
+  msg "Tworzenie pliku dokerfiles w celu utworzenia kontenera qoslink"
   mkdir ./dockerfiles
   cd ./dockerfiles
   echo "FROM centos:6.6" > dockerfile
   echo "MAINTAINER Czyz Piotr" >> dockerfile
-
+  
   echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget" >> dockerfile
   
@@ -80,7 +80,7 @@ crt_dockerfile_qoslink() {
 }
 
 crt_dockerfile_quaggalink() {
-  rm -Rf ./dockerfiles
+  msg "Tworzenie pliku dokerfiles w celu utworzenia kontenera quaggalink"
   mkdir ./dockerfiles
   cd ./dockerfiles
   echo "FROM centos:6.6" > dockerfile
@@ -117,17 +117,34 @@ chk_crt_img_centos66() {
   if [[ -z $LISTIMAGES ]] ; then
     msg "Pobieranie skompresowanego obrazu systemu CentOS 6.6"
     if [ ! -e "./centos-6-20150615_2019-docker.tar.xz" ] ; then
-      wget https://github.com/CentOS/sig-cloud-instance-images/blob/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/centos-6-20150615_2019-docker.tar.xz?raw=true
-      mv centos-6-20150615_2019-docker.tar.xz\?raw\=true centos-6-20150615_2019-docker.tar.xz
+      wget https://github.com/CentOS/sig-cloud-instance-images/blob/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/centos-6-20150615_2019-docker.tar.xz?raw=true > ./wgetcentos.log 2>&1
+      STAT1=(`cat ./wgetcentos.log | grep "saved"`)
+      if [[ -n $STAT1 ]] ; then
+        mv centos-6-20150615_2019-docker.tar.xz\?raw\=true centos-6-20150615_2019-docker.tar.xz
+        rm -f ./wgetcentos.log
+      else
+        die 82 "Błąd przy pobieraniu obrazu Centos 6.6"
+      fi 
     fi
     if [ ! -e "./Dockerfile" ] ; then
-      wget https://github.com/CentOS/sig-cloud-instance-images/raw/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/Dockerfile
+      wget https://github.com/CentOS/sig-cloud-instance-images/raw/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/Dockerfile > ./wgetdockerfile.log 2>&1
+      STAT2=(`cat ./wgetdockerfile.log | grep "saved"`)
+      if [[ ! -n $STAT2 ]] ; then
+        die 83 "Błąd przy pobieraniu pliku Dockerfile dla systemu Centos 6.6"
+      fi
+      rm -f ./wgetdockerfile.log
     fi
     msg "Budowanie obrazu Centos 6.6"
-    STAT=$(docker build .)
-    IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
-    docker tag $IDCon centos:6.6
-    msg "Utworzono obraz centos:6.6 "
+    docker build . > ./centos66.log 2>&1
+    IDCon=(`cat ./centos66.log | grep Successfully | awk '{ print $(NF) }' `)
+    if [[ -n $IDCon ]] ; then
+      docker tag $IDCon centos:6.6
+      msg "Utworzono obraz centos:6.6 "
+      rm -f centos-6-20150615_2019-docker.tar.xz
+      rm -f Dockerfile
+    else
+      die 84 "Błąd przy budowaniu obrazu Centos 6.6"
+    fi
   fi
 }
 
@@ -135,19 +152,24 @@ chk_crt_img_centos66() {
 chk_crt_img_qoslink() {
   LISTIMAGES=(`docker images | awk '/chefronpc\/qoslink/ {print}' `)
   if [[ -z $LISTIMAGES ]] ; then
+    msg "${Y}Brak obrazu kontenera qoslink w lokalnym repozytorium...${BCK}"
     # Sprawdzenie dostępności obrazu qoslink w repo Docker
     LISTIMAGES=(`docker search qoslink | awk '/chefronpc\/qoslink/ {print}' `)
     if [[ -z $LISTIMAGES ]] ; then
+      msg "${Y}Brak obrazu kontenera qoslink w zdalnym repozytorium Dockera${BCK}"
       # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
       chk_crt_img_centos66 
       # Tworzenie pliku dockerfile dla konfiguracji kontenera Qoslink
       crt_dockerfile_qoslink
-      STAT=$(docker build ./dockerfiles/)
-      IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
+      msg "Tworzenie kontenera qoslink..."
+      STAT=(`docker build ./dockerfiles/`)
+      IDCon=(`echo ${STAT[@]} | grep Successfully | awk '{ print $(NF) }' `)
       docker tag $IDCon chefronpc/qoslink:v1
       msg "Utworzono kontener qoslink"
+      rm -rf ./dockerfiles
     else
-      # Pobranie obrazu qoslink ze zdalnego repo Dokcer'a
+      # Pobranie obrazu qoslink ze zdalnego repo Docker'a
+      msg "Pobranie obrazu qoslink ze zdalnego repozytorium Dockera"
       docker pull chefronpc/qoslink:v1
     fi
   fi
@@ -157,28 +179,28 @@ chk_crt_img_qoslink() {
 chk_crt_img_quaggalink() {
   LISTIMAGES=(`docker images | awk '/chefronpc\/quaggalink/ {print}' `)
   if [[ -z $LISTIMAGES ]] ; then
+    msg "${Y}Brak obrazu kontenera quaggalink w lokalnym repozytorium...${BCK}"
     # Sprawdzenie dostępności obrazu quaggalink w repo Docker
     LISTIMAGES=(`docker search quaggalink | awk '/chefronpc\/quaggalink/ {print}' `)
     if [[ -z $LISTIMAGES ]] ; then
       # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
+      msg "${Y}Brak obrazu kontenera quaggalink w zdalnym repozytorium Dockera${BCK}"
       chk_crt_img_centos66 
       # Tworzenie pliku dockerfile dla konfiguracji kontenera Quaggalink
       crt_dockerfile_quaggalink
-      STAT=$(docker build ./dockerfiles/)
-      IDCon=(`echo $STAT | grep Successfully | awk '{ print $(NF) }' `)
+      msg "Tworzenie kontenera quaggalink..."
+      STAT=(`docker build ./dockerfiles`)
+      IDCon=(`echo ${STAT[@]} | grep Successfully | awk '{ print $(NF) }' `)
       docker tag $IDCon chefronpc/quaggalink:v1
       msg "Utworzono kontener quaggalink"
+      rm -rf ./dockerfiles
     else
       # Pobranie obrazu quaggalink ze zdalnego repo Dokcer'a
+      msg "Pobranie obrazu quaggalink ze zdalnego repozytorium Dockera"
       docker pull chefronpc/quaggalink:v1
     fi
   fi
 }
-
-chk_img_qoslink() {
-: # :
-}
-
 
 # Sprawdza dostępność bridga
 # We - $1 nazwa bridga
@@ -292,6 +314,19 @@ freecontainer() {
     fi
   done
   die 5 "Brak wolnych kontenerów"
+}
+
+# Sprawdza dostępność Hosta
+# We - $1 nazwa kontenera
+# --------------------------
+checkhost() {
+  LISTHOST=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<${#LISTHOST[@]}; CNT++ )) ; do
+    if [[ "$1" = "${LISTHOST[$CNT]}" ]] ; then
+      return 0
+    fi
+  done
+  return 1
 }
  
 # Zwraca numer pierwszego wolnego hosta
@@ -842,6 +877,10 @@ if [[ "${CFG[1]}" = "setnamecnthost" ]] ; then
     NEWHOST1="tak"		# Znacznik dla utworzenia nowego kontenera hosta
     msg "Przypisano nazwę hosta w kontenerze -h1: <${G}${CFG[1]}${BCK}>"
   fi
+else
+  if ! checkhost "${CFG[1]}" ; then
+    NEWHOST1="tak"		# Utworzy kontener o podanej nazwie hosta
+  fi
 fi
 return 0
 }
@@ -853,6 +892,10 @@ if [[ "${CFG[2]}" = "setnamecnthost" ]] ; then
     CFG[2]=$HOSTNAME
     NEWHOST2="tak"		# Znacznik dla utworzenia nowego kontenera hosta
     msg "Przypisano nazwę hosta w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
+  fi
+else
+  if ! checkhost "${CFG[2]}" ; then
+    NEWHOST2="tak"		# Utworzy kontener o podanej nazwie hosta
   fi
 fi
 return 0
@@ -1706,45 +1749,83 @@ save_container() {
     if [[ -n $ANS ]] ; then
       rm -f buffor_cfg.dat		
       docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
-
       cat buffor_cfg.dat >> ${CFG[39]}
-
-#      CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
-#      for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-#        if [[ "${CFG2[$CNT]}" = "_" ]] ; then
-#          CFG2[$CNT]=""
-#        fi
-#        #echo "CFG2[$CNT]=${CFG2[$CNT]}"
-#      done
-#
-#      msg "Zapis kontenera ${G}${LISTCONTAINER[$CNT3+1]}${BCK}"
       STAT4=1
       let CNT5=CNT5+1
-#      BUF=""
-#      for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
-#        if [[ -z ${CFG2[$CNT]} ]] ; then
-#          BUF=${BUF}:_
-#        else
-#          BUF=${BUF}:${CFG2[$CNT]}
-#        fi
-#      done
-#      echo $BUF >> ${CFG[39]}.dat
-
     fi
   done
   if [[ $STAT4 -eq 0 ]] ; then
      msg "${Y}Brak danych do zapisu${BCK}"
   else
     if [[ $CNT5 -eq 1 ]] ; then
-      msg "Zapis $CNT5 węzła${BCK}"
+      msg "Zapis: ${G}$CNT5 węzła${BCK}"
     else
-      msg "Zapis $CNT5 węzłów${BCK}"
+      msg "Zapis: ${G}$CNT5 węzłów${BCK}"
     fi
-      msg "Nazwa pliku: ${CFG[39]}"
+      msg "Nazwa pliku: ${G}${CFG[39]}${BCK}"
   fi
   exit 0
 }
 
+load_container() {
+#set -x
+  if [ ! -e ${CFG[40]} ] ; then
+    die 86 "Podany plik ${CFG[40]} nie istnieje"
+  fi 
+  CFGALL=(`cat ${CFG[40]}`)
+  unset CFG
+  #CFGALL2=(`echo ${CFGALL[@]} | awk -F'\n' '{print}' `)
+  echo -e "${CFGALL[@]}\n"
+  for CFG3 in $CFGALL ; do
+    echo ${CFG3[@]}
+    CFG=(`echo ${CFG3[@]} | awk 'BEGIN { RS = ":" } ; { print $0 }' `)
+    for (( CNT6=0; CNT6<${#WSK[@]}; CNT6++ )) ; do
+      if [[ ${CFG[$CNT6]} == "_" ]] ; then
+        CFG[$CNT6]=""
+      fi
+      echo -e "$CNT6:  \t${CFG[$CNT6]}"
+    done
+    
+    # --- Określenie rodzaju połączenia
+    # ---------------------------------
+    KOD=0
+    if [[ -n ${CFG[1]} ]] ; then
+      let KOD=$KOD+32 ; fi
+    if [[ -n ${CFG[2]} ]] ; then
+      let KOD=$KOD+16  ; fi
+    if [[ -n ${CFG[16]} ]] ; then
+      let KOD=$KOD+8   ; fi
+    if [[ -n ${CFG[17]} ]] ; then
+      let KOD=$KOD+4   ; fi
+    if [[ -n ${CFG[18]} ]] ; then
+      let KOD=$KOD+2   ; fi
+    if [[ -n ${CFG[19]} ]] ; then
+      let KOD=$KOD+1   ; fi
+
+    case "$KOD" in
+
+48)                                             # h1  ---  h2
+    crt_c
+    set_h1
+    crt_h1
+    set_h2
+    crt_h2
+    crt_linkif1
+    crt_linkif2
+    crt_linkif3
+    crt_linkif4
+    crt_brinqos
+    set_link
+    ;;
+ 
+*)
+    die 97 "Nieprawidłowe zestawienie parametrów przy odczycie"
+
+    esac
+		
+  done
+set +x
+}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1931,8 +2012,8 @@ done
 
 # Sprawdzenie i ewentualne utworzenie obrazów kontenerów Quaggalink i Qoslink
 # ---------------------------------------------------------------------------
-chk_crt_img_quaggalink
 chk_crt_img_qoslink
+chk_crt_img_quaggalink
 
 # Podgląd tablicy CFG[]
 # ---------------------
