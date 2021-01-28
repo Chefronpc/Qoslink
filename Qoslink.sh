@@ -1044,6 +1044,7 @@ crt_c() {
 # -----  Uruchomienie kontenera -h1 - Host
 crt_h1() {
   if [[ "$NEWHOST1" = "tak" ]] ; then
+  #  ANS=(` docker run -d -ti --name ${CFG[1]} --hostname ${CFG[1]} --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     ANS=(` docker run -d -ti --name ${CFG[1]} --hostname ${CFG[1]} --net none --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     msg "Uruchomienie hosta w kontenerze ${CFG[1]}"
   fi
@@ -1053,6 +1054,7 @@ crt_h1() {
 # -----  Uruchomienie kontenera -h1 - Host
 crt_h2() {
   if [[ "$NEWHOST2" = "tak" ]] ; then
+  #  ANS=(` docker run -d -ti --name ${CFG[2]} --hostname ${CFG[2]} --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     ANS=(` docker run -d -ti --name ${CFG[2]} --hostname ${CFG[2]} --net none --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     msg "Uruchomienie hosta w kontenerze ${CFG[2]}"
   fi
@@ -1062,6 +1064,7 @@ crt_h2() {
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
+   # ANS=(` docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]}  --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
     ANS=(` docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
@@ -1077,6 +1080,7 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
+  #  ANS=(` docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `)
     ANS=(` docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
@@ -1115,9 +1119,9 @@ crt_linkif2() {
       CFG[31]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
     fi
     docker exec ${CFG[2]} ip route add default via ${CFG[31]}
-    msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]} gateway:${CFG[31]}"
+    msg "Polaczenie bridg'a -br2 ${CFG[8]} z hostem ${CFG[2]} gateway:${CFG[31]}"
   else  
-    msg "Polaczenie bridg'a -br1 ${CFG[8]} z hostem ${CFG[2]}"
+    msg "Polaczenie bridg'a -br2 ${CFG[8]} z hostem ${CFG[2]}"
   fi  
 }
 
@@ -1144,10 +1148,11 @@ crt_linkif1r1() {
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   if [[ "$NEWROUTER" = "new" ]] ; then
-    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
     echo "New router"
   else
-    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+#  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
     echo "Add interface to router"
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
@@ -1169,7 +1174,8 @@ crt_linkif2r2() {
     ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
     echo "New router"
   else
-    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+   #ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
     echo "Add interface to router"
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
@@ -1728,7 +1734,7 @@ save_container() {
         PASS=1
       fi
       if [[ $PASS -eq 1 ]] ; then 
-        CFG[39]=${FILEPREFIX}${CNT}.dat		# Wyszukana wolna nazwa pliku
+        CFG[39]=${FILEPREFIX}${CNT}		# Wyszukana wolna nazwa pliku
         CNT=$FILEMAX
       fi
     done
@@ -1736,8 +1742,11 @@ save_container() {
       die 6 "Brak wolnych nazw plików"
     fi
   fi
-  if [[ -e ${CFG[39]} ]] ; then
-    die 89 "Istnieje już plik o tej nazwie. Podaj inną."
+  if [ -e "${CFG[39]}.dat" ] ; then
+    msg "${Y}Istnieje już plik o nazwie ${G}${CFG[39]}.dat${BCK}"
+    msg "${Y}Zostanie wykonany backup poprzedniej wersji jako ${G}${CFG[39]}.bck${BCK}"
+    cp -f ${CFG[39]}.dat ${CFG[39]}.bck
+    rm -f ${CFG[39]}.dat
   fi 
 
   LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
@@ -1749,7 +1758,7 @@ save_container() {
     if [[ -n $ANS ]] ; then
       rm -f buffor_cfg.dat		
       docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
-      cat buffor_cfg.dat >> ${CFG[39]}
+      cat buffor_cfg.dat >> ${CFG[39]}.dat
       STAT4=1
       let CNT5=CNT5+1
     fi
@@ -1762,30 +1771,26 @@ save_container() {
     else
       msg "Zapis: ${G}$CNT5 węzłów${BCK}"
     fi
-      msg "Nazwa pliku: ${G}${CFG[39]}${BCK}"
+      msg "Nazwa pliku: ${G}${CFG[39]}.dat${BCK}"
   fi
   exit 0
 }
 
 load_container() {
-#set -x
-  if [ ! -e ${CFG[40]} ] ; then
-    die 86 "Podany plik ${CFG[40]} nie istnieje"
+  if [ ! -e ${CFG[40]}.dat ] ; then
+    die 86 "Podany plik ${CFG[40]}.dat nie istnieje"
   fi 
-  CFGALL=(`cat ${CFG[40]}`)
-  unset CFG
-  #CFGALL2=(`echo ${CFGALL[@]} | awk -F'\n' '{print}' `)
-  echo -e "${CFGALL[@]}\n"
-  for CFG3 in $CFGALL ; do
-    echo ${CFG3[@]}
-    CFG=(`echo ${CFG3[@]} | awk 'BEGIN { RS = ":" } ; { print $0 }' `)
+  CFGALL=(`cat ${CFG[40]}.dat`)
+  CFGALL2=(`echo ${CFGALL[@]} | awk -F'\n' '{print}' `)
+  for (( CNT7=${#CFGALL[@]}; CNT7>0; CNT7-- )) ; do
+    unset CFG
+    CFG=(`echo ${CFGALL2[$CNT7-1]} | awk 'BEGIN { RS = ":" } ; { print $0 }' `)
     for (( CNT6=0; CNT6<${#WSK[@]}; CNT6++ )) ; do
       if [[ ${CFG[$CNT6]} == "_" ]] ; then
         CFG[$CNT6]=""
       fi
-      echo -e "$CNT6:  \t${CFG[$CNT6]}"
     done
-    
+    echo ".........................."
     # --- Określenie rodzaju połączenia
     # ---------------------------------
     KOD=0
@@ -1805,26 +1810,119 @@ load_container() {
     case "$KOD" in
 
 48)                                             # h1  ---  h2
-    crt_c
-    set_h1
-    crt_h1
-    set_h2
-    crt_h2
-    crt_linkif1
-    crt_linkif2
-    crt_linkif3
-    crt_linkif4
-    crt_brinqos
-    set_link
-    ;;
+      crt_c
+      set_h1
+      crt_h1
+      set_h2
+      crt_h2
+      crt_linkif1
+      crt_linkif2
+      crt_linkif3
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
+
+36)                                            # h1  ---  sw2
+      crt_c
+      set_h1
+      crt_h1
+      crt_linkif1
+      crt_linkif3
+      crt_linkif4sw2
+      crt_brinqos
+      set_link
+      ;;
+
+33)                                            # h1  ---  r2
+      crt_c
+      set_h1
+      crt_h1
+      set_r2
+      crt_r2
+      crt_linkif1
+      crt_linkif2r2
+      crt_linkif3
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
+
+24)                                             # sw1  ---  h2
+      crt_c
+      set_h2
+      crt_h2
+      crt_linkif2
+      crt_linkif3sw1
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
+
+12)                                             # sw1  ---  sw2
+      crt_c
+      crt_linkif3sw1
+      crt_linkif4sw2
+      crt_brinqos
+      set_link
+      ;;
+
+9)                                             # sw1  ---  r2
+      crt_c
+      set_r2
+      crt_r2
+      crt_linkif2r2
+      crt_linkif3sw1
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
+
+18)                                            # r1  ---  h2
+      crt_c
+      set_h2
+      crt_h2
+      set_r1
+      crt_r1
+      crt_linkif1r1
+      crt_linkif2
+      crt_linkif3
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
+
+6)                                             # r1  ---  sw2
+      crt_c
+      set_r1
+      crt_r1
+      crt_linkif1r1
+      crt_linkif3
+      crt_linkif4sw2
+      crt_brinqos
+      set_link
+      ;;
+
+3)                                             # r1  ---  r2
+      crt_c
+      set_r1
+      crt_r1
+      set_r2
+      crt_r2
+      crt_linkif1r1
+      crt_linkif2r2
+      crt_linkif3
+      crt_linkif4
+      crt_brinqos
+      set_link
+      ;;
  
 *)
-    die 97 "Nieprawidłowe zestawienie parametrów przy odczycie"
+      die 97 "Nieprawidłowe zestawienie parametrów przy odczycie"
 
     esac
 		
   done
-set +x
 }
 
 
