@@ -1142,18 +1142,17 @@ crt_linkif1r1() {
   ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
-  NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
-  NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
+  M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   if [[ "$NEWROUTER" = "new" ]] ; then
-  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
     echo "New router"
   else
-#  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
-  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-    echo "Add interface to router"
+   #ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
@@ -1165,30 +1164,29 @@ crt_linkif2r2() {
   ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
-  NETM[3]=${NET1[3]}; NETM[2]=${NET1[2]}; NETM[1]=${NET1[1]}; NETM[0]=${NET1[0]} # Adres sieci
-  NEWNET="${NETM[0]}.${NETM[1]}.${NETM[2]}.${NETM[3]}/$M1"
+  M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   if [[ "$NEWROUTER" = "new" ]] ; then
-    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
+    ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
     echo "New router"
   else
    #ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
     ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-    echo "Add interface to router"
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
 }
 
 crt_linkif3sw1() {
   pipework ${CFG[16]} -i ${CFG[25]} ${CFG[0]} ${CFG[23]}
-  msg "Polaczenie switch'a -sw1 ${CFG[16]} z kontenerem ${CFG[0]}"
+  msg "Polaczenie switch'a -sw1 ${G}${CFG[16]}${BCK} z kontenerem ${G}${CFG[0]}${BCK}"
 }
 
 crt_linkif4sw2() {
   pipework ${CFG[17]} -i ${CFG[26]} ${CFG[0]} ${CFG[24]}
-  msg "Polaczenie switch'a -sw1 ${CFG[17]} z kontenerem ${CFG[0]}"
+  msg "Polaczenie switch'a -sw1 ${G}${CFG[17]}${BCK} z kontenerem ${G}${CFG[0]}${BCK}"
 }
 
 
@@ -1230,6 +1228,7 @@ set_link() {
   done
   echo $BUF > buffor_cfg.dat
   docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
+  rm -f buffor_cfg.dat
 }
 
 
@@ -1625,10 +1624,17 @@ prn_allcontainer() {
 
 }
 
+# ----- Usuwanie virtualnych interfejsów oraz mostów
+# ----- utworzonych skryptem "pipework"
+# ----- We - Nazwa kontenera
+# -----------------------------------------------------------
+#del_veth() {
+#  PID=(`docker inspect $1 | grep \"Pid\"
+#}
+
 # ----- Kasowanie kontenerów 
 # ----- Po nazwie kontenera Qoslink lub adresie IP interfejsu
 # ------------------------------------------------------------
-
 del_container() {
   ANS=(`docker ps -a | grep ${CFG[27]}`)
   if [[ -n $ANS ]] ; then
@@ -1646,6 +1652,7 @@ del_container() {
     else [[ -n $CONTAINERHOST ]] 			# Kasowanie hosta
       msg "Usuwanie kontenera typu host: \"${G}${CFG[27]}${BCK}\""
     fi
+#    del_veth "${CFG[27]}"
     ANS=(`docker stop -t 0 ${CFG[27]}`)
     ANS=(`docker rm ${CFG[27]}`) 
     msg "Gotowe."
@@ -1893,14 +1900,24 @@ load_container() {
       ;;
 
 6)                                             # r1  ---  sw2
+set -x
+read temp
       crt_c
+read temp
       set_r1
+read temp
       crt_r1
+read temp
       crt_linkif1r1
+read temp
       crt_linkif3
+read temp
       crt_linkif4sw2
+read temp
       crt_brinqos
+read temp
       set_link
+set +x
       ;;
 
 3)                                             # r1  ---  r2
@@ -2765,20 +2782,36 @@ case "$KOD" in
     CFG[23]=$NEWIP
     freeip ${CFG[5]}
     CFG[24]=$NEWIP
+set -x
+read temp
     set_c
+read temp
     set_br1
+read temp
     set_sw2
+read temp
     crt_c
+read temp
     set_r1
+read temp
     crt_r1
+read temp
     set_if1r1
+read temp
     crt_linkif1r1
+read temp
     set_if3
+read temp
     crt_linkif3
+read temp
     set_if4
+read temp
     crt_linkif4sw2
+read temp
     crt_brinqos
+read temp
     set_link 
+set +x
     ;;
 
 
