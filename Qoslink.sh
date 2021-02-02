@@ -2,9 +2,9 @@
 
 # Parametry wstępne -  Globalne
 # ----------------
-BRPREFIX="brlink"	# Domyślne nazwy bridgy, switchy, linków, routerów, hostów
-BRMAX=1024		# oraz interfejsów tworzonych w tych kontenerach.
-SWPREFIX="brswitch"
+BRPREFIX="brlink"	# Domyślne nazwy bridgy, switchy, linków, routerów, hostów, 
+BRMAX=1024		# routerów zewnetrzych phlink - ABR
+SWPREFIX="brswitch"     # oraz interfejsów tworzonych w tych kontenerach.
 SWMAX=512
 QOSPREFIX="qoslink"
 QOSMAX=256
@@ -12,6 +12,8 @@ HOSTPREFIX="host"
 HOSTMAX=256
 QUAGGAPREFIX="quaggalink"
 QUAGGAMAX=256
+PHPREFIX="phlink"
+PHMAX=256
 IFPREFIX="eth"
 IFMAX=64
 FILEPREFIX="qosnet"	# Domyślna nazwa pliku
@@ -380,6 +382,38 @@ freerouter() {
   die 5 "Brak wolnych routerów"
 }
  
+# Sprawdza dostępność łącza phlink
+# We - $1 nazwa kontenera
+# --------------------------
+checkphlink() {
+  LISTPHLINK=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<${#LISTPHLINK[@]}; CNT++ )) ; do
+    if [[ "$1" = "${LISTPHLINK[$CNT]}" ]] ; then
+      return 0
+    fi
+  done
+  return 1
+}
+ 
+# Zwraca numer pierwszego wolnego łącza phlink
+# Wy - nazwa kontenera
+# --------------------------------
+freephlink() {
+  LISTPHLINK=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
+  for (( CNT=0; CNT<$PHMAX; CNT++ )) ; do
+    PASS=0 
+    ANS=(`echo ${LISTPHLINK[@]} | grep $PHPREFIX$CNT `)
+    if [[ -n ${ANS[@]} ]] ; then
+      PASS=1
+    fi
+    if [[ $PASS -eq 0 ]] ; then
+      PHNAME=$PHPREFIX$CNT 		# Wyszukana wolna nazwa dla nowego łącza phlink (kontenera)
+      return 0
+    fi
+  done
+  die 5 "Brak wolnych łączy phlink"
+}
+ 
 # Sprawdza dostępność interfejsów w kontenerze
 # We - $1 nazwa interfejsu w kontenerze $2
 # We - $2 nazwa kontenera
@@ -568,9 +602,6 @@ freeip() {
       done
     done
   done
-
-
-  #echo ========================================================================= #rem
   # ----- Wyszukanie pierwszego wolnego IP w zadanej podsieci
   # ---------------------------------------------------------
   I3=$[NET1[3]+1]; I2=${NET1[2]}; I1=${NET1[1]}; I0=${NET1[0]} # Pierwszy adres sieci
@@ -923,6 +954,28 @@ fi
 return 0
 }
 
+# ---- Przypisanie nazwy dla phlink - łącza do zewnetrznego interfejsu <ph1>
+set_ph1() {
+if [[ "${CFG[32]}" == "setnamecntph" ]] ; then
+  if freephlink ; then 
+    CFG[32]=$PHNAME
+    msg "Przypisano nazwę łącza wyjściowego w kontenerze -ph1: <${G}${CFG[32]}${BCK}>"
+  fi
+fi
+return 0
+}
+
+# ---- Przypisanie nazwy dla phlink - łącza do zewnetrznego interfejsu <ph2>
+set_ph2() {
+if [[ "${CFG[33]}" == "setnamecntph" ]] ; then
+  if freephlink ; then 
+    CFG[33]=$PHNAME
+    msg "Przypisano nazwę łącza wyjściowego w kontenerze -ph2: <${G}${CFG[33]}${BCK}>"
+  fi
+fi
+return 0
+}
+
 # -----  Przypisanie nazwy dla bridga <br1>  -------
 set_br1() {
 if [[ -z ${CFG[7]} ]] ; then
@@ -1011,6 +1064,28 @@ fi
 return 0
 }
 
+# -----  Przypisanie nazwy dla interfejsu <if1> w łączu phlink <-ph1>  -------
+set_if1ph1() {
+if [[ -z ${CFG[3]} ]] ; then
+  if freeinterface "${CFG[32]}" ; then
+    CFG[3]=$IFNAME
+    msg "Przypisano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[32]}${BCK}>"
+  fi
+fi
+return 0
+}
+
+# -----  Przypisanie nazwy dla interfejsu <if2> w łączu phlink <-ph2>  -------
+set_if2ph2() {
+if [[ -z ${CFG[4]} ]] ; then
+  if freeinterface "${CFG[33]}" ; then
+    CFG[4]=$IFNAME
+    msg "Przypisano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[33]}${BCK}>"
+  fi
+fi
+return 0
+}
+
 # -----  Przypisanie nazwy dla interfejsu <if3> w kontenerze linku <-c>  -------
 set_if3() {
 if [[ -z ${CFG[25]} ]] ; then
@@ -1064,7 +1139,6 @@ crt_h2() {
 # -----  Uruchomienie kontenera -r1 - Router Quagga ( QoSQuagga )
 crt_r1() {
   if ! checkrouter "${CFG[18]}" ; then
-   # ANS=(` docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]}  --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
     ANS=(` docker run -d -ti --name ${CFG[18]} --hostname ${CFG[18]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
@@ -1080,18 +1154,47 @@ crt_r1() {
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
 crt_r2() {
   if ! checkrouter "${CFG[19]}" ; then
-  #  ANS=(` docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `)
     ANS=(` docker run -d -ti --name ${CFG[19]} --hostname ${CFG[19]} --net none --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
-    NEWROUTER=0		# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
+    NEWROUTER="new"		# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
     return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[19]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[19]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
-  NEWROUTER=1		# Jeżeli już był uruchomiony -> znacznik umozliwiający
+  NEWROUTER="old"		# Jeżeli już był uruchomiony -> znacznik umozliwiający
 			# pozostawienie istniejącego ID-routera
+}
+
+# -----  Uruchomienie kontenera -ph1 - Łącza PhLink do hosta fizycznego
+crt_ph1() {
+  if ! checkphlink "${CFG[32]}" ; then
+    ANS=(` docker run -d -ti --name ${CFG[32]} --hostname ${CFG[32]}  --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
+    ANS=(` docker exec ${CFG[32]} /bin/bash -c 'service zebra start && service ospfd start' `)
+    ANS=(` docker exec ${CFG[32]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
+    msg "Uruchomienie łącza phlink w kontenerze ${CFG[32]}"
+    NEWPHLINK="new"	# znacznik nowego łącza phlink - wymagany przy tworzeniu ID-Routera
+    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+  fi
+  msg "Łącze PhLink w kontenerze ${Y}${CFG[32]} jest już w systemie${BCK}"
+  msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[32]}${BCK} z adresem ${Y}${CFG[5]}${BCK}"
+  NEWPHLINK="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
+}
+
+# -----  Uruchomienie kontenera -ph2 - Łącza PhLink do hosta fizycznego
+crt_ph2() {
+  if ! checkphlink "${CFG[33]}" ; then
+    ANS=(` docker run -d -ti --name ${CFG[33]} --hostname ${CFG[33]}  --cap-add ALL chefronpc/quaggalink:v1 /bin/bash `) 
+    ANS=(` docker exec ${CFG[33]} /bin/bash -c 'service zebra start && service ospfd start' `)
+    ANS=(` docker exec ${CFG[33]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
+    msg "Uruchomienie łącza phlink w kontenerze ${CFG[33]}"
+    NEWPHLINK="new"	# znacznik nowego łącza phlink - wymagany przy tworzeniu ID-Routera
+    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+  fi
+  msg "Łącze PhLink w kontenerze ${Y}${CFG[33]} jest już w systemie${BCK}"
+  msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[33]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
+  NEWPHLINK="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 
@@ -1139,7 +1242,8 @@ crt_linkif1r1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
@@ -1147,12 +1251,12 @@ crt_linkif1r1() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  if [[ "$NEWROUTER" = "new" ]] ; then
-  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-    echo "New router"
+  if [[ "$NEWROUTER" = "new_temp" ]] ; then
+    ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
   else
-   #ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
     ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
@@ -1161,7 +1265,8 @@ crt_linkif2r2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 2" -c "ip ospf dead-interval 5" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
@@ -1169,14 +1274,101 @@ crt_linkif2r2() {
   # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
-  if [[ "$NEWROUTER" = "new" ]] ; then
+  if [[ "$NEWROUTER" = "new_temp" ]] ; then
     ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-    echo "New router"
+    echo $ANS
   else
-   #ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "exit" -c "exit" -c "write" `)
     ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
   fi
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
+}
+
+crt_linkif1ph1() {
+  pipework ${CFG[7]} -i ${CFG[3]} ${CFG[32]} ${CFG[5]}
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z łączem phlink ${CFG[32]}"
+  # Konfiguracja daemona ZEBRA w routerze
+  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
+  ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
+  # Konfiguracja daemona OSPF w routerze
+  if [[ "$NEWPHLINK" = "new_temp" ]] ; then
+  ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
+  else
+    ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
+  fi
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[32]}"
+}
+
+crt_linkif2ph2() {
+  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[33]} ${CFG[6]}
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z łączem phlink ${CFG[33]}"
+  # Konfiguracja daemona ZEBRA w routerze    
+  ANS=(`docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
+    echo $ANS
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
+  ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
+  # Konfiguracja daemona OSPF w routerze
+  if [[ "$NEWPHLINK" = "new" ]] ; then
+    ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" -c "exit" `)
+    echo $ANS
+  else
+    ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" -c "exit" `)
+    echo $ANS
+  fi
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[33]}"
+}
+
+crt_linkif1docker0() {
+#  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[33]} ${CFG[6]}
+  IPM5=(`docker exec ${CFG[32]} ip a | grep eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+  IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
+  msg "Polaczenie łącza phlink ${CFG[32]}"
+  # Konfiguracja daemona ZEBRA w routerze
+  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-docker0" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+    echo $ANS
+  ANS=(`docker exec ${CFG[33]} vtysh -c "configure terminal" -c "ip route 0.0.0.0 0.0.0.0 ${IP5}" -c "exit" -c "write" `)
+    echo $ANS
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${IPM5} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  M1=(`echo ${IPM5} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  # Konfiguracja daemona OSPF w routerze
+  #if [[ "$NEWPHLINK" = "new" ]] ; then
+  #  ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "router-id $ID" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)   
+  #else
+    ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "default-information originate always" -c "exit" -c "ip route 0.0.0.0 0.0.0.0 ${IP5}" -c "exit" -c "write" `)
+    echo $ANS
+  #fi
+  ANS=(` docker exec ${CFG[32]} iptables -t nat -A POSTROUTING -s 0.0.0.0/0 -o eth0 -j SNAT --to-source ${IP5} `)
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[32]}"
+}
+
+crt_linkif2docker0() {
+  IPM5=(`docker exec ${CFG[33]} ip a | grep eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+  IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
+  msg "Polaczenie łącza phlink ${CFG[33]}"
+  # Konfiguracja daemona ZEBRA w routerze
+  docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-${IP5}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit"
+  # Odczytanie adresu sieci na podstawie IP i Maski
+  NET1=(` ipcalc ${IPM5} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
+  M1=(`echo ${IPM5} | awk -F/ '{print $2}' `)
+  NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
+  # Konfiguracja daemona OSPF w routerze
+  docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "default-information originate always" -c "exit" -c "ip route 0.0.0.0 0.0.0.0 ${IP5}" -c "exit" -c "write" -c "exit"
+  ANS=(` docker exec ${CFG[33]} iptables -t nat -A POSTROUTING -s 0.0.0.0/0 -o eth0 -j SNAT --to-source ${IP5} `)
+  msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[33]}"
 }
 
 crt_linkif3sw1() {
@@ -1496,7 +1688,7 @@ upgrade_container() {
         A2=(` echo ${CFG[20]} | awk -F: '{print $2}'`)
         if [[ -n $ANS ]] ; then
           if [[ "$A1" = "${CFG2[1]}" || "$A1" = "${CFG2[2]}" || "$A1" = "${CFG2[16]}" || "$A1" = "${CFG2[17]}" || "$A1" = "${CFG2[18]}" || "$A1" = "${CFG2[19]}" || "$A1" = "${CFG2[32]}" || "$A1" = "${CFG2[33]}" ]] ; then
-            if [[ "$A2" = "${CFG2[1]}" || "$A2" = "${CFG2[2]}" || "$A2" = "${CFG2[16]}" || "$A2" = "${CFG2[17]}" || "$A2" = "${CFG2[18]}" || "$A2" = "${CFG2[19]}" || "$A2" = "${CFG2[32]}" || "$#A2" = "${CFG2[33]}" ]] ; then
+            if [[ "$A2" = "${CFG2[1]}" || "$A2" = "${CFG2[2]}" || "$A2" = "${CFG2[16]}" || "$A2" = "${CFG2[17]}" || "$A2" = "${CFG2[18]}" || "$A2" = "${CFG2[19]}" || "$A2" = "${CFG2[32]}" || "$A2" = "${CFG2[33]}" ]] ; then
               STAT2="dev1:dev2"
             fi
           fi  
@@ -1535,33 +1727,41 @@ read_dsp_cnt() {
     #echo "CFG2[$CNT]=${CFG2[$CNT]}"
   done
           # Ustalenie rodzaju połączenia
-  if [[ -n ${CFG2[1]} && -z ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+  if [[ -n ${CFG2[1]} ]] ; then
     TYPESIDE1="host"
     DEVSIDE1="-h1:${GB}${CFG2[1]}${BCK}"
   fi
-  if [[ -z ${CFG2[1]} && -n ${CFG2[16]} && -z ${CFG2[18]} ]] ; then
+  if [[ -n ${CFG2[16]} ]] ; then
     TYPESIDE1="switch"
     DEVSIDE1="-sw1:${GB}${CFG2[16]}${BCK}"
     CFG2[3]="${BLK}----${BCK}"
     CFG2[5]="${BLK}---------------${BCK}"
   fi
-  if [[ -z ${CFG2[1]} && -z ${CFG2[16]} && -n ${CFG2[18]} ]] ; then
+  if [[ -n ${CFG2[18]} ]] ; then
     TYPESIDE1="router"
     DEVSIDE1="-r1:${GB}${CFG2[18]}${BCK}"
   fi
-  if [[ -n ${CFG2[2]} && -z ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+  if [[ -n ${CFG2[32]} ]] ; then
+    TYPESIDE1="phlink"
+    DEVSIDE1="-ph1:${GB}${CFG2[32]}${BCK}"
+  fi
+  if [[ -n ${CFG2[2]} ]] ; then
     TYPESIDE2="host"
     DEVSIDE2="-h2:${GB}${CFG2[2]}${BCK}"
   fi
-  if [[ -z ${CFG2[2]} && -n ${CFG2[17]} && -z ${CFG2[19]} ]] ; then
+  if [[ -n ${CFG2[17]} ]] ; then
     TYPESIDE2="switch"
     DEVSIDE2="-sw2:${GB}${CFG2[17]}${BCK}"
     CFG2[4]="${BLK}----${BCK}"
     CFG2[6]="${BLK}---------------${BCK}"
   fi
-  if [[ -z ${CFG2[2]} && -z ${CFG2[17]} && -n ${CFG2[19]} ]] ; then
+  if [[ -n ${CFG2[19]} ]] ; then
     TYPESIDE2="router"
     DEVSIDE2="-r2:${GB}${CFG2[19]}${BCK}"
+  fi
+  if [[ -n ${CFG2[33]} ]] ; then
+    TYPESIDE2="phlink"
+    DEVSIDE2="-ph2:${GB}${CFG2[33]}${BCK}"
   fi
   if [[ -z ${CFG2[30]} ]] ; then
     CFG2[30]="${BLK}--------------${BCK}"
@@ -1612,7 +1812,6 @@ prn_container() {
 }
 
 prn_allcontainer() {
-
   LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $2,$(NF) }' `)
   let CNTMAX=${#LISTCONTAINER[@]*2}
   for (( i=0; i<$CNTMAX; i=i+2 )) ; do
@@ -1900,24 +2099,14 @@ load_container() {
       ;;
 
 6)                                             # r1  ---  sw2
-set -x
-read temp
       crt_c
-read temp
       set_r1
-read temp
       crt_r1
-read temp
       crt_linkif1r1
-read temp
       crt_linkif3
-read temp
       crt_linkif4sw2
-read temp
       crt_brinqos
-read temp
       set_link
-set +x
       ;;
 
 3)                                             # r1  ---  r2
@@ -1998,7 +2187,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Wtymusza automatyczną nazwę routera
+      if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Wymusza automatyczną nazwę routera
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecntquagga"
@@ -2015,6 +2204,26 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
           fi
         else
           CFG[$CNT2]="setnamecntquagga"
+        fi
+      fi
+
+      if [ ${PARAM[$CNT]} = "-ph1" ] ; then		# Wymusza automatyczną nazwę łącza phlink
+        if [[ -n ${CFG[$CNT2]} ]] ; then
+          if [[ "$CFGNEXT" = "-" ]] ; then
+            CFG[$CNT2]="setnamecntph"
+          fi
+        else
+          CFG[$CNT2]="setnamecntph"
+        fi
+      fi
+
+      if [ ${PARAM[$CNT]} = "-ph2" ] ; then		# Wymusza  automatyczną nazwę łącza phlink
+        if [[ -n ${CFG[$CNT2]} ]] ; then
+          if [[ "$CFGNEXT" = "-" ]] ; then
+            CFG[$CNT2]="setnamecntph"
+          fi
+        else
+          CFG[$CNT2]="setnamecntph"
         fi
       fi
 
@@ -2425,6 +2634,10 @@ fi
 # -----------------------------------------------------------------------------------------------
 
 KOD=0
+if [[ -n ${CFG[32]} ]] ; then
+  let KOD=$KOD+512 ; fi
+if [[ -n ${CFG[33]} ]] ; then 
+  let KOD=$KOD+256  ; fi
 if [[ -n ${CFG[1]} ]] ; then
   let KOD=$KOD+128 ; fi
 if [[ -n ${CFG[2]} ]] ; then 
@@ -2782,38 +2995,21 @@ case "$KOD" in
     CFG[23]=$NEWIP
     freeip ${CFG[5]}
     CFG[24]=$NEWIP
-set -x
-read temp
     set_c
-read temp
     set_br1
-read temp
     set_sw2
-read temp
     crt_c
-read temp
     set_r1
-read temp
     crt_r1
-read temp
     set_if1r1
-read temp
     crt_linkif1r1
-read temp
     set_if3
-read temp
     crt_linkif3
-read temp
     set_if4
-read temp
     crt_linkif4sw2
-read temp
     crt_brinqos
-read temp
     set_link 
-set +x
     ;;
-
 
 98)						# r1 + ip1  ---         h2
     checkipall ${CFG[5]}
@@ -3113,7 +3309,7 @@ set +x
     set_link
     ;;
 
-3)
+3)						# r1        ---  r2
     freenet
     freeip $NEWNET
     CFG[5]=$NEWIP
@@ -3141,6 +3337,102 @@ set +x
     crt_linkif4
     crt_brinqos
     set_link
+    ;;
+
+264)						# sw1       ---  ph2
+    freenet
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_sw1
+    set_br2
+    crt_c
+    set_ph2
+    crt_ph2
+    set_if2ph2
+    crt_linkif2ph2
+    set_if3
+    crt_linkif3sw1
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;    
+
+280)						# sw1       ---  ph2 + ip2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_sw1
+    set_br2
+    crt_c
+    set_ph2
+    crt_ph2
+    set_if2ph2
+    crt_linkif2ph2
+    set_if3
+    crt_linkif3sw1
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;    
+
+258)						# r1       ---  ph2
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+set -x
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+read temp
+    crt_r1
+read temp
+    set_ph2
+read temp
+    crt_ph2
+read temp
+    set_if1r1
+read temp
+    crt_linkif1r1
+read temp
+    set_if2ph2
+read temp
+    crt_linkif2ph2
+read temp
+    set_if3
+read temp
+    crt_linkif3
+read temp
+    set_if4
+read temp
+    crt_linkif4
+read temp
+    crt_brinqos
+read temp
+    set_link
+read temp
+    crt_linkif2docker0
+read temp
+set +x
     ;;
 
 
