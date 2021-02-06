@@ -33,7 +33,6 @@ BB="\e[34;1m"
 BLKB="\e[30;1m"
 BCK="\e[0m"   		# powrót do stadanrdowego zestawu kolorów terminala
 
-NEWROUTER=0		
 
 # Komentarze i błędy
 # ------------------------------
@@ -2000,6 +1999,10 @@ load_container() {
     # --- Określenie rodzaju połączenia
     # ---------------------------------
     KOD=0
+    if [[ -n ${CFG[32]} ]] ; then
+      let KOD=$KOD+128 ; fi
+    if [[ -n ${CFG[33]} ]] ; then
+      let KOD=$KOD+64  ; fi
     if [[ -n ${CFG[1]} ]] ; then
       let KOD=$KOD+32 ; fi
     if [[ -n ${CFG[2]} ]] ; then
@@ -2012,7 +2015,7 @@ load_container() {
       let KOD=$KOD+2   ; fi
     if [[ -n ${CFG[19]} ]] ; then
       let KOD=$KOD+1   ; fi
-
+set -x
     case "$KOD" in
 
 48)                                             # h1  ---  h2
@@ -2123,7 +2126,62 @@ load_container() {
       set_link
       ;;
  
+72)						# sw1  ---  ph2
+      crt_c
+      set_ph2
+      crt_ph2
+      set_if2ph2
+      crt_linkif2ph2
+      crt_linkif3sw1
+      crt_linkif4
+      crt_brinqos
+      set_link
+      crt_linkif2docker0
+      ;;    
+
+66)						# r1  ---  ph2
+    crt_c
+    set_r1
+    crt_r1
+    set_ph2
+    crt_ph2
+    crt_linkif1r1
+    crt_linkif2ph2
+    crt_linkif3
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;
+
+132)						# ph1  ---  sw2
+    crt_c
+    set_ph1
+    crt_ph1
+    crt_linkif1ph1
+    crt_linkif3
+    crt_linkif4sw2
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;    
+
+129)						# ph1  ---  r2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_r2
+    crt_r2
+    crt_linkif1ph1
+    crt_linkif2r2
+    crt_linkif3
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;
 *)
+set +x
       die 97 "Nieprawidłowe zestawienie parametrów przy odczycie"
 
     esac
@@ -3038,7 +3096,7 @@ case "$KOD" in
     ;;
 
 
-35)						# h1 + ip1  ---         r2
+35)						# ri + ip1  ---         r2
     checkipall ${CFG[5]}
     freeip ${CFG[5]}
     CFG[6]=$NEWIP
@@ -3397,44 +3455,286 @@ case "$KOD" in
     CFG[23]=$NEWIP
     freeip $NEWNET
     CFG[24]=$NEWIP
-set -x
     set_c
     set_br1
     set_br2
     crt_c
     set_r1
-read temp
     crt_r1
-read temp
     set_ph2
-read temp
     crt_ph2
-read temp
     set_if1r1
-read temp
     crt_linkif1r1
-read temp
     set_if2ph2
-read temp
     crt_linkif2ph2
-read temp
     set_if3
-read temp
     crt_linkif3
-read temp
     set_if4
-read temp
     crt_linkif4
-read temp
     crt_brinqos
-read temp
     set_link
-read temp
     crt_linkif2docker0
-read temp
-set +x
     ;;
 
+290)						# r1 + ip1  ---         ph2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_ph2
+    crt_ph2
+    set_if1r1
+    crt_linkif1r1
+    set_if2ph2
+    crt_linkif2ph2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;
+
+274)						# r1       ---  ph2 + ip2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_r1
+    crt_r1
+    set_ph2
+    crt_ph2
+    set_if1r1
+    crt_linkif1r1
+    set_if2ph2
+    crt_linkif2ph2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;
+
+306)						# r1 + ip1  ---  ph2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_r1
+      crt_r1
+      set_ph2
+      crt_ph2
+      set_if1r1
+      crt_linkif1r1
+      set_if2ph2
+      crt_linkif2ph2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+      crt_linkif2docker0
+    else     
+      exit 0
+    fi
+    ;;
+
+516)						# ph1       ---  sw2
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_sw2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_if1ph1
+    crt_linkif1ph1
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4sw2
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;    
+
+548)						# ph1 + ip1  ---       sw2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_sw2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_if1ph1
+    crt_linkif1ph1
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4sw2
+    crt_brinqos
+    set_link 
+    crt_linkif1docker0
+    ;;
+
+513)						# ph1       ---  r2
+    freenet
+    freeip $NEWNET
+    CFG[5]=$NEWIP
+    freeip $NEWNET
+    CFG[6]=$NEWIP
+    freeip $NEWNET
+    CFG[23]=$NEWIP
+    freeip $NEWNET
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_r2
+    crt_r2
+    set_if1ph1
+    crt_linkif1ph1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;
+
+545)						# ph1 + ip1  ---         r2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_r2
+    crt_r2
+    set_if1ph1
+    crt_linkif1ph1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;
+
+19)						# ph1       ---  r2 + ip2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_r2
+    crt_r2
+    set_if1ph1
+    crt_linkif1ph1
+    set_if2r2
+    crt_linkif2r2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;
+
+51)						# ph1 + ip1  ---  r2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_ph1
+      crt_ph1
+      set_r2
+      crt_r2
+      set_if1ph1
+      crt_linkif1ph1
+      set_if2r2
+      crt_linkif2r2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+      crt_linkif1docker0
+    else     
+      exit 0
+    fi
 
 *)
     die 80 "${R}Nieprawidłowe zestawienie parametrów.${BCK}"    
