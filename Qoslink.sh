@@ -1202,15 +1202,16 @@ crt_ph2() {
 # -----  Tworzenie połączen pomiędzy bridgem a kontenerem
 # -------------------------------------------------------------
 crt_linkif1() {
-  pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
   if [[ -n ${CFG[30]} ]] ; then
     if [[ "${CFG[30]}" == "setgw" ]] ; then
       BCAST1=(` ipcalc ${CFG[5]} -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
       CFG[30]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
     fi
-    docker exec ${CFG[1]} ip route add default via ${CFG[30]}
+#    docker exec ${CFG[1]} ip route add default via ${CFG[30]}
+    pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}@${CFG[30]}
     msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]} gateway:${CFG[30]}"
   else  
+    pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
     msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
   fi
 }
@@ -1489,7 +1490,6 @@ upgrade_link() {
 
 # Sprawdzenie poprawności parametru -band
 # We -  -band
-# Wy -  Zmienne ANS1 i ANS2
 # ---------------------------------------
 chk_band() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?[MmKk]bit$"`)
@@ -1502,7 +1502,6 @@ chk_band() {
 
 # Sprawdzenie poprawności parametru -loss
 # We -  -loss
-# Wy -  Zmienne ANS1 i ANS2
 #----------------------------------------
 chk_loss() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
@@ -1515,7 +1514,6 @@ chk_loss() {
 
 # Sprawdzenie poprawności parametru -delay
 # We -  -delay
-# Wy -  Zmienna ANS1
 #----------------------------------------
 chk_delay() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?ms$"`)
@@ -1527,8 +1525,7 @@ chk_delay() {
 }
 
 # Sprawdzenie poprawności parametru -duplic
-# e -  -duplic
-# Wy -  Zmienne ANS1 i ANS2
+# We -  -duplic
 #----------------------------------------
 chk_duplic() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
@@ -1537,6 +1534,19 @@ chk_duplic() {
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
+}
+
+# Sprawdza poprawności parametru -gw
+# We -  -gw1 lub -gw2
+# Wy - status 0-OK   1-Błąd
+# ------------------------------------
+chk_gw() {
+  ANS1=(`echo $1 | grep -E "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\$"`)
+  if [[ -n $ANS1 ]] ; then
+    return 0		# IP/mask poprawne
+  else
+    return 1		# IP/mask błędne
+  fi
 }
 
 # Lista typów łączy
@@ -2240,8 +2250,8 @@ load_container() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami i parametrami wejściowymi dla skryptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L )
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 | 41 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L   -? )
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -2253,75 +2263,88 @@ while [ $CNT -lt $CNTPARAM ]; do
   let CNT=CNT+1 
 done
 
-# Uporządkowanie parametrów z tablicy PARAM[] do CFG[] według pozycji w WSK[].
+# Uporządkowanie wejściowych parametrów z tablicy PARAM[] do CFG[] według pozycji w WSK[].
 # ----------------------------------------------------------------------------
 for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
-  STAT=0				# Znacznik zatrzymujący sort w przypadku nieznanej opcji
+  STAT=0				# Znacznik zatrzymujący sortowanie w przypadku nieznanej opcji
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
-    if [ ${PARAM[$CNT]} = ${WSK[$CNT2]} ] ; then
+    if [[ "${PARAM[$CNT]}" = "${WSK[$CNT2]}" ]] ; then
+      MV=0				# Znacznik przesuniecia o 1 lub 2 miejsca pętli CNT
       STAT=1
       CFG[$CNT2]=${PARAM[$CNT+1]}
       CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru 
       CFGNEXT=${CFGNEXT:0:1}		# "-" lub pusty ciąg oznacza brak argumentu 
-					# w bieżacym parametrze (np. -sw1 -h2 serwer
+      					# w bieżacym parametrze (np. -sw1 -h2 serwer
 
-      if [ ${PARAM[$CNT]} = "-h1" ] ; then		# Wtymusza automatyczną nazwę hosta
+      if [[ "${PARAM[$CNT]}" = "-h1" ]] ; then		# Wymusza automatyczną nazwę hosta
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecnthost"
+            MV=1			# Opcja jednoargumentowa
           fi
         else
           CFG[$CNT2]="setnamecnthost"
+          MV=1
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-h2" ] ; then		# Wymusza  automatyczną nazwę hosta
+      if [[ "${PARAM[$CNT]}" = "-h2" ]] ; then		# Wymusza  automatyczną nazwę hosta
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecnthost"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamecnthost"
+          MV=1
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-r1" ] ; then		# Wymusza automatyczną nazwę routera
+      if [[ "${PARAM[$CNT]}" = "-r1" ]] ; then		# Wymusza automatyczną nazwę routera
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecntquagga"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamecntquagga"
+            MV=1
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-r2" ] ; then		# Wymusza  automatyczną nazwę routera
+      if [[ "${PARAM[$CNT]}" = "-r2" ]] ; then		# Wymusza  automatyczną nazwę routera
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecntquagga"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamecntquagga"
+            MV=1
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-ph1" ] ; then		# Wymusza automatyczną nazwę łącza phlink
+      if [[ "${PARAM[$CNT]}" = "-ph1" ]] ; then		# Wymusza automatyczną nazwę łącza phlink
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecntph"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamecntph"
+          MV=1
         fi
       fi
 
-      if [ ${PARAM[$CNT]} = "-ph2" ] ; then		# Wymusza  automatyczną nazwę łącza phlink
+      if [[ "${PARAM[$CNT]}" = "-ph2" ]] ; then		# Wymusza  automatyczną nazwę łącza phlink
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamecntph"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamecntph"
+          MV=1
         fi
       fi
 
@@ -2329,9 +2352,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczną nazwę switcha
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamebrswitch"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamebrswitch"
+          MV=1
         fi
       fi
 
@@ -2339,9 +2364,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczną nazwę switcha
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setnamebrswitch"
+            MV=1
           fi
         else
           CFG[$CNT2]="setnamebrswitch"
+          MV=1
         fi
       fi
 
@@ -2349,9 +2376,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setgw"
+            MV=1
           fi
         else
           CFG[$CNT2]="setgw"
+          MV=1
         fi
       fi
 
@@ -2359,9 +2388,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="setgw"
+            MV=1
           fi
         else
           CFG[$CNT2]="setgw"
+          MV=1
         fi
       fi
 
@@ -2369,9 +2400,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="deldefaultnamecnt"
+            MV=1
           fi
         else
           CFG[$CNT2]="deldefaultnamecnt"
+          MV=1
         fi
       fi
 
@@ -2379,9 +2412,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="printallcnt"
+            MV=1
           fi
         else
           CFG[$CNT2]="printallcnt"
+          MV=1
         fi
       fi
 
@@ -2389,9 +2424,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="allupgrade"
+            MV=1
           fi
         else
           CFG[$CNT2]="allupgrade"
+          MV=1
         fi
       fi
 
@@ -2399,36 +2436,61 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         if [[ -n ${CFG[$CNT2]} ]] ; then		
           if [[ "$CFGNEXT" = "-" ]] ; then
             CFG[$CNT2]="savedefaultname"
+            MV=1
           fi
         else
           CFG[$CNT2]="savedefaultname"
+          MV=1
         fi
       fi
 
       if [ ${PARAM[$CNT]} = "-L" ] ; then		# Odczyt parametrów sieci
         if [[ -n ${CFG[$CNT2]} ]] ; then		
           if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="noname"
+            CFG[${CNT2}]="noname"
+            MV=1
           fi
         else
-          CFG[$CNT2]="noname"
+          CFG[${CNT2}]="noname"
+          MV=1
         fi
       fi
 
       if [ ${PARAM[$CNT]} = "-v" ] ; then		# Wyswietlanie komunikatow
         CFG[$CNT2]=0
+        MV=1
       fi
 
       if [ ${PARAM[$CNT]} = "-V" ] ; then		# Wyswietlanie komunikatow debugowania
-        CFG[$CNT2]=0
+        CFG[${CNT2}]=0
+        MV=1
       fi
-
+      if [ "$MV" -eq "1" ] ; then
+        let CNT=CNT+0 		# Przesunięcie indeksu przy opcji 1 argumentowej
+        MV=0
+        #CNT2=${#WSK[@]}		# Wczesniejsze zakończenie petli (CNT2)
+      else
+        let CNT=CNT+1 		# Przesunięcie indeksu przy opcji 2 argumentowej
+        MV=0
+        #CNT2=${#WSK[@]}		# Wczesniejsze zakończenie petli (CNT2)
+      fi
     fi
   done
+  
   CFGIT=${PARAM[$CNT]}	# Weryfikacja poprawności nazwy opcji
   CFGIT=${CFGIT:0:1}	# Jeżeli jest z "-" i nie ma w tablicy WSK[] => błąd	
   if [[ "$STAT" = "0" && "$CFGIT" = "-" ]] ; then
     die 69 "Podano nieprawidłową opcję : ${PARAM[$CNT]}"
+  fi
+
+  let CNT1=CNT+1
+  PARAMTHIS=${PARAM[CNT1]}
+  PARAMTHIS=${PARAMTHIS:0:1}
+  if [[ "${CNT1}" -ne "${#PARAM[@]}" ]] ; then
+    if [[ "${PARAMTHIS}" != "-" ]] ; then # Wykrywa wprowadzane dane (np. host1) nie przyporzadkowane
+                                        # do żadnej opcji  np. -v -r1 router host1 -ip1 10.0.0.2/24
+      die 98 "Nie podano nawzy opcji dla wprowadzonej danej \"${PARAM[CNT1]}\""
+    fi
   fi
 done
 
@@ -2442,6 +2504,27 @@ chk_crt_img_quaggalink
 #for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
 #  echo "CFG[$CNT] = ${CFG[$CNT]} " 
 #done
+CNT=0
+if [[ -n ${CFG[20]} ]] ; then
+  let CNT=CNT+1
+fi
+if [[ -n ${CFG[27]} ]] ; then
+  let CNT=CNT+1
+fi
+if [[ -n ${CFG[38]} ]] ; then
+  let CNT=CNT+1
+fi
+if [[ -n ${CFG[39]} ]] ; then
+  let CNT=CNT+1
+fi
+if [[ -n ${CFG[40]} ]] ; then
+  let CNT=CNT+1
+fi
+if [[ "$CNT" -gt "1" ]] ; then
+  die 99 "Wybierz tylko jedną z opcji \" -U -D -P -S -L \""
+fi
+
+
 
 # Weryfikacja wprowadzonych parametrów i ich zależności
 # ----------------------------------------------------- 
@@ -2628,8 +2711,13 @@ fi
 
 # ----  Odczyt parametrów sieci
 if [[ -n ${CFG[40]} ]] ; then
-  load_container
-  exit 0
+  if [[ "${CFG[40]}" = "noname" ]] ; then
+    msg "${Y}Nie podano nazwy pliku${BCK}"
+    exit 0
+  else
+    load_container
+    exit 0
+  fi
 fi
 
 # -----  Weryfikacja nazwy kontenera  -------
@@ -2721,7 +2809,21 @@ if [[ -n ${CFG[6]} ]] ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
+set -x
+# ----  Weryfikacja poprawności GW1
+if [[ -n ${CFG[30]} ]] ; then
+  if ! chk_gw ${CFG[30]}  ; then
+    die 8 "Niepoprawny format parametru bramy dla -gw1. (format: x.y.z.v)"
+  fi
+fi
 
+# ----  Weryfikacja poprawności GW2
+if [[ -n ${CFG[31]} ]] ; then
+  if ! chk_gw ${CFG[31]}  ; then
+    die 8 "Niepoprawny format parametru bramy dla -gw2. (format: x.y.z.v)"
+  fi
+fi
+set +x
 # Podgląd tablicy z parametrami
 # ---------------------
 #for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
