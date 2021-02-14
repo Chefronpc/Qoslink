@@ -37,7 +37,7 @@ BCK="\e[0m"   		# powrót do stadanrdowego zestawu kolorów terminala
 # Komentarze i błędy
 # ------------------------------
 msg () {                        # Komentarze wyswietlane przy ustawionej opcji  -v
-  if [[ ${CFG[21]} ]] ; then
+  if [[ ! ${CFG[21]} ]] ; then
     echo -e $1$2$3$4$5$6$7$8$9
   fi
 }
@@ -69,7 +69,7 @@ crt_dockerfile_qoslink() {
   echo "FROM centos:6.6" > dockerfile
   echo "MAINTAINER Czyz Piotr" >> dockerfile
   
-  echo "RUN yum -y update" >> dockerfile
+#  echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget tcpdump" >> dockerfile
   
   echo "RUN wget https://iperf.fr/download/iperf_2.0.2/iperf_2.0.2-4_amd64.tar.gz \\" >> dockerfile
@@ -87,7 +87,7 @@ crt_dockerfile_quaggalink() {
   echo "FROM centos:6.6" > dockerfile
   echo "MAINTAINER Czyz Piotr" >> dockerfile
 
-  echo "RUN yum -y update" >> dockerfile
+#  echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget tcpdump quagga" >> dockerfile
   
   echo "RUN echo \"hostname quaggalink\" > /etc/quagga/zebra.conf \\" >> dockerfile
@@ -194,7 +194,7 @@ chk_crt_img_quaggalink() {
       msg "Tworzenie kontenera quaggalink..."
       STAT=(`docker build ./dockerfiles`)
       IDCon=(`echo ${STAT[@]} | grep Successfully | awk '{ print $(NF) }' `)
-      docker tag $IDCon chefronpc/quaggalink:v1
+      docker tag $IDCon chefronpc/quaggalink:v3
       msg "Utworzono kontener quaggalink"
       rm -rf ./dockerfiles
     else
@@ -903,76 +903,80 @@ return 0
 
 # ---- Przypisanie nazwy dla Hosta <h1>
 set_h1() {
-if [[ "${CFG[1]}" = "setnamecnthost" ]] ; then
+if [[ "${CFG[1]}" = "setdefault" ]] ; then
   if freehost ; then 
     CFG[1]=$HOSTNAME
-    NEWHOST1="tak"		# Znacznik dla utworzenia nowego kontenera hosta
-    msg "Przypisano nazwę hosta w kontenerze -h1: <${G}${CFG[1]}${BCK}>"
+    NEWHOST1="tak"		# Znacznik utworzenia nowego kontenera hosta
+    msg "Przypisano nazwę dla hosta w kontenerze -h1: <${G}${CFG[1]}${BCK}>"
   fi
 else
-  if ! checkhost "${CFG[1]}" ; then
-    NEWHOST1="tak"		# Utworzy kontener o podanej nazwie hosta
-  fi
+  msg "Podano nazwę dla hosta w kontenerze -h1: <${G}${CFG[1]}${BCK}>"
 fi
 return 0
 }
 
 # ---- Przypisanie nazwy dla Hosta <h2>
 set_h2() {
-if [[ "${CFG[2]}" = "setnamecnthost" ]] ; then
+if [[ "${CFG[2]}" = "setdefault" ]] ; then
   if freehost ; then 
     CFG[2]=$HOSTNAME
-    NEWHOST2="tak"		# Znacznik dla utworzenia nowego kontenera hosta
-    msg "Przypisano nazwę hosta w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
+    NEWHOST2="tak"		# Znacznik utworzenia nowego kontenera hosta
+    msg "Przypisano nazwę dla hosta w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
   fi
 else
-  if ! checkhost "${CFG[2]}" ; then
-    NEWHOST2="tak"		# Utworzy kontener o podanej nazwie hosta
-  fi
+  msg "Podano nazwę dla hosta w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
 fi
 return 0
 }
 
 # ---- Przypisanie nazwy dla routera Quagga <r1>
 set_r1() {
-if [[ "${CFG[18]}" == "setnamecntquagga" ]] ; then
+if [[ "${CFG[18]}" == "setdefault" ]] ; then
   if freerouter ; then 
     CFG[18]=$QUAGGANAME
-    msg "Przypisano nazwę routera w kontenerze -r1: <${G}${CFG[18]}${BCK}>"
+    msg "Przypisano nazwę dla routera w kontenerze -r1: <${G}${CFG[18]}${BCK}>"
   fi
+else
+  msg "Podano nazwę dla routera w kontenerze -r1: <${G}${CFG[18]}${BCK}>"
 fi
 return 0
 }
 
 # ---- Przypisanie nazwy dla routera Quagga <r2>
 set_r2() {
-if [[ "${CFG[19]}" == "setnamecntquagga" ]] ; then
-  if freerouter ; then 
+if [[ "${CFG[19]}" == "setdefault" ]] ; then
+   if freerouter ; then 
     CFG[19]=$QUAGGANAME
-    msg "Przypisano nazwę routera w kontenerze -r2: <${G}${CFG[19]}${BCK}>"
+    msg "Przypisano nazwę dla routera w kontenerze -r2: <${G}${CFG[19]}${BCK}>"
   fi
+else
+  msg "Podano nazwę dla routera w kontenerze -r2: <${G}${CFG[19]}${BCK}>"
 fi
 return 0
 }
 
 # ---- Przypisanie nazwy dla phlink - łącza do zewnetrznego interfejsu <ph1>
 set_ph1() {
-if [[ "${CFG[32]}" == "setnamecntph" ]] ; then
+if [[ "${CFG[32]}" == "setdefault" ]] ; then
   if freephlink ; then 
     CFG[32]=$PHNAME
     msg "Przypisano nazwę łącza wyjściowego w kontenerze -ph1: <${G}${CFG[32]}${BCK}>"
   fi
+else
+  msg "Podano nazwę łącza wyjsciowego w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
 fi
 return 0
 }
 
 # ---- Przypisanie nazwy dla phlink - łącza do zewnetrznego interfejsu <ph2>
 set_ph2() {
-if [[ "${CFG[33]}" == "setnamecntph" ]] ; then
+if [[ "${CFG[33]}" == "setdefault" ]] ; then
   if freephlink ; then 
     CFG[33]=$PHNAME
     msg "Przypisano nazwę łącza wyjściowego w kontenerze -ph2: <${G}${CFG[33]}${BCK}>"
   fi
+else
+  msg "Podano nazwę łącza wyjsciowego w kontenerze -h2: <${G}${CFG[2]}${BCK}>"
 fi
 return 0
 }
@@ -1001,7 +1005,7 @@ return 0
 
 # -----  Przypisanie nazwy dla switcha <sw1>  -------
 set_sw1() {
-if [[ "${CFG[16]}" == "setnamebrswitch" ]] ; then
+if [[ "${CFG[16]}" == "setdefault" ]] ; then
   if freeswitch ; then 
     CFG[16]=$SWNAME
     msg "Przypisano nazwę switcha -sw1: <${G}${CFG[16]}${BCK}>"
@@ -1012,7 +1016,7 @@ return 0
 
 # -----  Przypisanie nazwy dla switch <sw2>  -------
 set_sw2() {
-if [[ "${CFG[17]}" == "setnamebrswitch" ]] ; then
+if [[ "${CFG[17]}" == "setdefault" ]] ; then
   if freeswitch ; then 
     CFG[17]=$SWNAME
     msg "Przypisano nazwę switcha -sw2: <${G}${CFG[17]}${BCK}>"
@@ -1023,44 +1027,52 @@ return 0
 
 # -----  Przypisanie nazwy dla interfejsu <if1> w hoscie <-h1>  -------
 set_if1() {
-if [[ -z ${CFG[3]} ]] ; then
+if [[ -z ${CFG[3]} && -n ${CFG[1]} ]] ; then
   if freeinterface "${CFG[1]}" ; then
     CFG[3]=$IFNAME
     msg "Przypisano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> dla ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[1]}${BCK}>"
   fi
+else
+  msg "Podano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> dla ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[1]}${BCK}>"
 fi
 return 0
 }
 
 # -----  Przypisanie nazwy dla interfejsu <if2> w hoscie <-h2>  -------
 set_if2() {
-if [[ -z ${CFG[4]} ]] ; then
+if [[ -z ${CFG[4]} && -n ${CFG[2]} ]] ; then
   if freeinterface "${CFG[2]}" ; then
     CFG[4]=$IFNAME
     msg "Przypisano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[2]}${BCK}>"
   fi
+else
+  msg "Podano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[2]}${BCK}>"
 fi
 return 0
 }
 
 # -----  Przypisanie nazwy dla interfejsu <if1> w routerze <-r1>  -------
 set_if1r1() {
-if [[ -z ${CFG[3]} ]] ; then
+if [[ -z ${CFG[3]} && -n ${CFG[18]} ]] ; then
   if freeinterface "${CFG[18]}" ; then
     CFG[3]=$IFNAME
     msg "Przypisano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[18]}${BCK}>"
   fi
+else
+  msg "Podano nazwę interfejsu -if1: <${G}${CFG[3]}${BCK}> ip:<${G}${CFG[5]}${BCK}> w kontenerze <${G}${CFG[18]}${BCK}>"
 fi
 return 0
 }
 
 # -----  Przypisanie nazwy dla interfejsu <if2> w routerze <-r2>  -------
 set_if2r2() {
-if [[ -z ${CFG[4]} ]] ; then
+if [[ -z ${CFG[4]} && -n ${CFG[19]} ]] ; then
   if freeinterface "${CFG[19]}" ; then
     CFG[4]=$IFNAME
     msg "Przypisano nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[19]}${BCK}>"
   fi
+else
+  msg "Podano  nazwę interfejsu -if2: <${G}${CFG[4]}${BCK}> ip:<${G}${CFG[6]}${BCK}> w kontenerze <${G}${CFG[19]}${BCK}>"
 fi
 return 0
 }
@@ -1113,14 +1125,13 @@ return 0
 # -----------------------------------------------------
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add All chefronpc/qoslink:v1 /bin/bash `)
+  ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add NET_ADMIN chefronpc/qoslink:v1 /bin/bash `)
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
 # -----  Uruchomienie kontenera -h1 - Host
 crt_h1() {
-  if [[ "$NEWHOST1" = "tak" ]] ; then
-  #  ANS=(` docker run -d -ti --name ${CFG[1]} --hostname ${CFG[1]} --cap-add ALL chefronpc/host:v1 /bin/bash `) 
+  if ! checkhost "${CFG[1]}" ; then
     ANS=(` docker run -d -ti --name ${CFG[1]} --hostname ${CFG[1]} --net none --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     msg "Uruchomienie hosta w kontenerze ${CFG[1]}"
   fi
@@ -1129,8 +1140,7 @@ crt_h1() {
 
 # -----  Uruchomienie kontenera -h2 - Host
 crt_h2() {
-  if [[ "$NEWHOST2" = "tak" ]] ; then
-  #  ANS=(` docker run -d -ti --name ${CFG[2]} --hostname ${CFG[2]} --cap-add ALL chefronpc/host:v1 /bin/bash `) 
+  if ! checkhost "${CFG[2]}" ; then
     ANS=(` docker run -d -ti --name ${CFG[2]} --hostname ${CFG[2]} --net none --cap-add ALL chefronpc/host:v1 /bin/bash `) 
     msg "Uruchomienie hosta w kontenerze ${CFG[2]}"
   fi
@@ -1203,45 +1213,49 @@ crt_ph2() {
 # -------------------------------------------------------------
 crt_linkif1() {
   if [[ -n ${CFG[30]} ]] ; then
-    if [[ "${CFG[30]}" == "setgw" ]] ; then
+    if [[ "${CFG[30]}" == "setdefault" ]] ; then
       BCAST1=(` ipcalc ${CFG[5]} -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
       CFG[30]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
     fi
-#    docker exec ${CFG[1]} ip route add default via ${CFG[30]}
     pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}@${CFG[30]}
     msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]} gateway:${CFG[30]}"
   else  
     pipework ${CFG[7]} -i ${CFG[3]} ${CFG[1]} ${CFG[5]}
     msg "Polaczenie bridg'a -br1 ${CFG[7]} z hostem ${CFG[1]}"
   fi
+  brctl stp ${CFG[7]} on
 }
 
 crt_linkif2() {
-  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
   if [[ -n ${CFG[31]} ]] ; then
-    if [[ "${CFG[31]}" == "setgw" ]] ; then
+    if [[ "${CFG[31]}" == "setdefault" ]] ; then
       BCAST1=(` ipcalc ${CFG[6]} -b | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
       CFG[31]="${BCAST1[0]}.${BCAST1[1]}.${BCAST1[2]}.$[BCAST1[3]-1]"
     fi
-    docker exec ${CFG[2]} ip route add default via ${CFG[31]}
+    pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}@${CFG[31]}
     msg "Polaczenie bridg'a -br2 ${CFG[8]} z hostem ${CFG[2]} gateway:${CFG[31]}"
   else  
+    pipework ${CFG[8]} -i ${CFG[4]} ${CFG[2]} ${CFG[6]}
     msg "Polaczenie bridg'a -br2 ${CFG[8]} z hostem ${CFG[2]}"
   fi  
+  brctl stp ${CFG[8]} on
 }
 
 crt_linkif3() {
   pipework ${CFG[7]} -i ${CFG[25]} ${CFG[0]} ${CFG[23]}
+  brctl stp ${CFG[7]} on
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z kontenerem ${CFG[0]}"
 }
 
 crt_linkif4() {
   pipework ${CFG[8]} -i ${CFG[26]} ${CFG[0]} ${CFG[24]}
-  msg "Polaczenie bridg'a -br1 ${CFG[8]} z kontenerem ${CFG[0]}"
+  brctl stp ${CFG[8]} on
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
 }
 
 crt_linkif1r1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
+  brctl stp ${CFG[7]} on
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
   # Konfiguracja daemona ZEBRA w routerze
   ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
@@ -1253,15 +1267,13 @@ crt_linkif1r1() {
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
 
 crt_linkif2r2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
-  msg "Polaczenie bridg'a -br1 ${CFG[8]} z routerem ${CFG[19]}"
+  brctl stp ${CFG[8]} on
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z routerem ${CFG[19]}"
   # Konfiguracja daemona ZEBRA w routerze
   ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
@@ -1272,14 +1284,13 @@ crt_linkif2r2() {
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
 }
 
 crt_linkif1ph1() {
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[32]} ${CFG[5]}
+  brctl stp ${CFG[7]} on
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
   msg "Polaczenie bridg'a -br1 ${CFG[7]} z łączem phlink ${CFG[32]}"
   # Konfiguracja daemona ZEBRA w routerze
   ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
@@ -1291,14 +1302,13 @@ crt_linkif1ph1() {
   ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[32]}"
 }
 
 crt_linkif2ph2() {
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[33]} ${CFG[6]}
+  brctl stp ${CFG[8]} on
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
   msg "Polaczenie bridg'a -br2 ${CFG[8]} z łączem phlink ${CFG[33]}"
   # Konfiguracja daemona ZEBRA w routerze    
   ANS=(`docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
@@ -1310,14 +1320,10 @@ crt_linkif2ph2() {
   ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" -c "exit" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[33]}"
 }
 
 crt_linkif1docker0() {
-#  pipework ${CFG[8]} -i ${CFG[4]} ${CFG[33]} ${CFG[6]}
   IPM5=(`docker exec ${CFG[32]} ip a | grep eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
   IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
   msg "Polaczenie łącza phlink ${CFG[32]}"
@@ -1329,9 +1335,6 @@ crt_linkif1docker0() {
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "default-information originate always" -c "exit" -c "ip route 0.0.0.0 0.0.0.0 ${IP5}" -c "exit" -c "write" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   ANS=(` docker exec ${CFG[32]} iptables -t nat -A POSTROUTING -s 0.0.0.0/0 -o eth0 -j SNAT --to-source ${IP5} `)
   msg "Konfiguracja daemona ZEBRA oraz ${G}OSPF${BCK} w łączu phlink ${G}${CFG[32]}${BCK}"
 }
@@ -1348,20 +1351,19 @@ crt_linkif2docker0() {
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 0" -c "default-information originate always" -c "exit" -c "ip route 0.0.0.0 0.0.0.0 ${IP5}" -c "exit" -c "write" -c "exit" `)
-  #ANS=(` service stop ospfd `)
-  #ANS=(` service restart zebraa `)
-  #ANS=(` service start ospfd `)
   ANS=(` docker exec ${CFG[33]} iptables -t nat -A POSTROUTING -s 0.0.0.0/0 -o eth0 -j SNAT --to-source ${IP5} `)
   msg "Konfiguracja daemona ZEBRA oraz ${G}OSPF${BCK} w łączu phlink ${G}${CFG[33]}${BCK}"
 }
 
 crt_linkif3sw1() {
   pipework ${CFG[16]} -i ${CFG[25]} ${CFG[0]} ${CFG[23]}
+  brctl stp ${CFG[16]} on
   msg "Polaczenie switch'a -sw1 ${G}${CFG[16]}${BCK} z kontenerem ${G}${CFG[0]}${BCK}"
 }
 
 crt_linkif4sw2() {
   pipework ${CFG[17]} -i ${CFG[26]} ${CFG[0]} ${CFG[24]}
+  brctl stp ${CFG[17]} on
   msg "Polaczenie switch'a -sw1 ${G}${CFG[17]}${BCK} z kontenerem ${G}${CFG[0]}${BCK}"
 }
 
@@ -1372,10 +1374,10 @@ crt_linkif4sw2() {
 crt_brinqos() {
   msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący interfejsy ${CFG[25]} oraz ${CFG[26]}"
   msg "Adres ip ${G}${CFG[0]}${BCK} to ${G}${CFG[23]}${BCK}.  Adres ip ${G}${CFG[24]}${BCK} zostaje ${G}wolny${BCK}."
-  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
-  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
-  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
-  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
+#  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
+#  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
+#  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
+#  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
   ANS=(`docker exec ${CFG[0]} brctl addbr br0`)
   ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[25]}`)
   ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[26]}`)
@@ -1528,7 +1530,7 @@ chk_delay() {
 # We -  -duplic
 #----------------------------------------
 chk_duplic() {
-  ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
+  ANS1=(`echo ${CFG[$1]} | grep -E "^(1000|[1-9][0-9][0-9]|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
@@ -1686,7 +1688,7 @@ upgrade_container() {
             fi
           fi  
         fi
-        if [[ "${CFG[20]}" = "${CFG2[5]}" || "${CFG[20]}" = "${CFG2[6]}" || "${CFG[20]}" = "allupgrade" || "$STAT2" = "dev1:dev2" ]] ; then
+        if [[ "${CFG[20]}" = "${CFG2[5]}" || "${CFG[20]}" = "${CFG2[6]}" || "${CFG[20]}" = "setdefault" || "$STAT2" = "dev1:dev2" ]] ; then
           msg "${Y}Przed zmianą:${BCK}"
           read_dsp_cnt ${CFG2[0]}
           msg "${Y}Po zmianie:${BCK}"
@@ -1766,6 +1768,7 @@ read_dsp_cnt() {
   N=(` ipcalc ${CFG2[23]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NM="${N[0]}.${N[1]}.${N[2]}.${N[3]}/$M"
   #msg "Połączenie pomiędzy ${DEVSIDE1} a ${DEVSIDE2}" 
+  msg "----------------------------------------------------------------------------"
   msg "${TYPESIDE1} \t\t\t \t\t \t\t\t ${TYPESIDE2}"
   msg "${DEVSIDE1} \t\t\t -c:${Y}${CFG2[0]}${BCK} \t\t\t ${DEVSIDE2}" 
   msg "-if1:${CFG2[3]} \t\t\t -link:${CFG2[15]} \t\t\t -if2:${CFG2[4]}"
@@ -1782,7 +1785,6 @@ read_dsp_cnt() {
   msg "\t\t\t-loss\t${G}${CFG2[35]}${BCK}"
   msg "\t\t\t-delay\t${G}${CFG2[36]}${BCK}"
   msg "\t\t\t-duplic\t${G}${CFG2[37]}${BCK}"
-  msg "----------------------------------------------------------------------------"
 }
 
 prn_container() {
@@ -1962,7 +1964,7 @@ del_container() {
             fi
           fi  
         fi
-        if [[ "${CFG[27]}" = "${CFG2[5]}" || "${CFG[27]}" = "${CFG2[6]}" || "${CFG[27]}" = "deldefaultnamecnt" || "$STAT2" = "dev1:dev2" ]] ; then
+        if [[ "${CFG[27]}" = "${CFG2[5]}" || "${CFG[27]}" = "${CFG2[6]}" || "${CFG[27]}" = "setdefault" || "$STAT2" = "dev1:dev2" ]] ; then
           msg "Usuwanie kontenera typu qoslink: "${G}${CFG2[0]}${BCK}""
           ANS=(`docker stop -t 0 ${CFG2[0]}`)
           ANS=(`docker rm ${CFG2[0]}`)
@@ -1980,7 +1982,7 @@ del_container() {
 # ------------------------------------------------------------
 save_container() {
 
-  if [[ "${CFG[39]}" = "savedefaultname" ]] ; then
+  if [[ "${CFG[39]}" = "setdefault" ]] ; then
     LISTFILE=(`ls`)		
     PASS=0
     for (( CNT=0; CNT<$FILEMAX; CNT++ )) ; do
@@ -2035,6 +2037,7 @@ load_container() {
   if [ ! -e ${CFG[40]}.dat ] ; then
     die 86 "Podany plik ${CFG[40]}.dat nie istnieje"
   fi 
+  CFG21=${CFG[21]}
   CFGALL=(`cat ${CFG[40]}.dat`)
   CFGALL2=(`echo ${CFGALL[@]} | awk -F'\n' '{print}' `)
   for (( CNT7=${#CFGALL[@]}; CNT7>0; CNT7-- )) ; do
@@ -2045,6 +2048,7 @@ load_container() {
         CFG[$CNT6]=""
       fi
     done
+    CFG[21]=$CFG21		# przywrócenie aktualnego znacznika widocznosci komunikatów
     echo ".........................."
     # --- Określenie rodzaju połączenia
     # ---------------------------------
@@ -2251,10 +2255,11 @@ load_container() {
 #
 #   Tablica z dostępnymi opcjami i parametrami wejściowymi dla skryptu
 #   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 | 41 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -v   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L   -? )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -s   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L   -? )
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
+
 CNT=0
 CNTPARAM=$#
 while [ $CNT -lt $CNTPARAM ]; do
@@ -2275,188 +2280,23 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
       CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru 
       CFGNEXT=${CFGNEXT:0:1}		# "-" lub pusty ciąg oznacza brak argumentu 
       					# w bieżacym parametrze (np. -sw1 -h2 serwer
+	
+      PARAM_AUTO="_-h1_-h2_-r1_-r2_-ph1_-ph2_-sw1_-sw2_-gw1_-gw2_-D_-P_-U_-S_-L_"
 
-      if [[ "${PARAM[$CNT]}" = "-h1" ]] ; then		# Wymusza automatyczną nazwę hosta
+      ANS=(` echo $PARAM_AUTO | grep "_${PARAM[$CNT]}_" `)
+      if [[ -n $ANS ]] ; then		
         if [[ -n ${CFG[$CNT2]} ]] ; then
           if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecnthost"
+            CFG[$CNT2]="setdefault"
             MV=1			# Opcja jednoargumentowa
           fi
         else
-          CFG[$CNT2]="setnamecnthost"
-          MV=1
-        fi
+          CFG[$CNT2]="setdefault"
+          MV=1				# Opcja jednoargumentowa na końcu 
+        fi				# listy parametrów
       fi
 
-      if [[ "${PARAM[$CNT]}" = "-h2" ]] ; then		# Wymusza  automatyczną nazwę hosta
-        if [[ -n ${CFG[$CNT2]} ]] ; then
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecnthost"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamecnthost"
-          MV=1
-        fi
-      fi
-
-      if [[ "${PARAM[$CNT]}" = "-r1" ]] ; then		# Wymusza automatyczną nazwę routera
-        if [[ -n ${CFG[$CNT2]} ]] ; then
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecntquagga"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamecntquagga"
-            MV=1
-        fi
-      fi
-
-      if [[ "${PARAM[$CNT]}" = "-r2" ]] ; then		# Wymusza  automatyczną nazwę routera
-        if [[ -n ${CFG[$CNT2]} ]] ; then
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecntquagga"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamecntquagga"
-            MV=1
-        fi
-      fi
-
-      if [[ "${PARAM[$CNT]}" = "-ph1" ]] ; then		# Wymusza automatyczną nazwę łącza phlink
-        if [[ -n ${CFG[$CNT2]} ]] ; then
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecntph"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamecntph"
-          MV=1
-        fi
-      fi
-
-      if [[ "${PARAM[$CNT]}" = "-ph2" ]] ; then		# Wymusza  automatyczną nazwę łącza phlink
-        if [[ -n ${CFG[$CNT2]} ]] ; then
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamecntph"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamecntph"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-sw1" ] ; then 
-        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczną nazwę switcha
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamebrswitch"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamebrswitch"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-sw2" ] ; then 
-        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczną nazwę switcha
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setnamebrswitch"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setnamebrswitch"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-gw1" ] ; then 
-        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setgw"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setgw"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-gw2" ] ; then 
-        if [[ -n ${CFG[$CNT2]} ]] ; then              # Wymusza automatyczny adres gateway
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="setgw"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="setgw"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-D" ] ; then		# Usuwanie wszystkich
-        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="deldefaultnamecnt"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="deldefaultnamecnt"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-P" ] ; then		# Wyświetlenie parametrów wszystkich
-        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="printallcnt"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="printallcnt"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-U" ] ; then		# Upgrade wszystkich
-        if [[ -n ${CFG[$CNT2]} ]] ; then		# lub wybranego kontenera
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="allupgrade"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="allupgrade"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-S" ] ; then		# Zapis parametrów sieci
-        if [[ -n ${CFG[$CNT2]} ]] ; then		
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[$CNT2]="savedefaultname"
-            MV=1
-          fi
-        else
-          CFG[$CNT2]="savedefaultname"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-L" ] ; then		# Odczyt parametrów sieci
-        if [[ -n ${CFG[$CNT2]} ]] ; then		
-          if [[ "$CFGNEXT" = "-" ]] ; then
-            CFG[${CNT2}]="noname"
-            MV=1
-          fi
-        else
-          CFG[${CNT2}]="noname"
-          MV=1
-        fi
-      fi
-
-      if [ ${PARAM[$CNT]} = "-v" ] ; then		# Wyswietlanie komunikatow
+      if [ ${PARAM[$CNT]} = "-s" ] ; then		# Wyswietlanie komunikatow
         CFG[$CNT2]=0
         MV=1
       fi
@@ -2465,14 +2305,12 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         CFG[${CNT2}]=0
         MV=1
       fi
+
       if [ "$MV" -eq "1" ] ; then
-        let CNT=CNT+0 		# Przesunięcie indeksu przy opcji 1 argumentowej
         MV=0
-        #CNT2=${#WSK[@]}		# Wczesniejsze zakończenie petli (CNT2)
       else
         let CNT=CNT+1 		# Przesunięcie indeksu przy opcji 2 argumentowej
         MV=0
-        #CNT2=${#WSK[@]}		# Wczesniejsze zakończenie petli (CNT2)
       fi
     fi
   done
@@ -2569,7 +2407,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY1
 if [[ -z ${CFG[13]} && ! ${CFG[20]} ]] ; then
-  CFG[13]="0.12ms"
+  CFG[13]="0.1ms"
 else
   if [[ -n ${CFG[13]} ]] ; then
     chk_delay 13
@@ -2578,7 +2416,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY2
 if [[ -z ${CFG[14]} && ! ${CFG[20]} ]] ; then
-  CFG[14]="0.12ms"
+  CFG[14]="0.1ms"
 else
   if [[ -n ${CFG[14]} ]] ; then
     chk_delay 14
@@ -2623,9 +2461,9 @@ if [[ -n ${CFG[35]} ]] ; then
   chk_loss 35
   if [[ -n $ANS1 ]] ; then      # Podawana wartość procentowa
     LOSS=(`echo ${CFG[35]} | awk -F% '{print $1}'`)
-    LOSS=(`echo "scale=2; 100-$LOSS" | bc `)
-    LOSS=$(echo "scale=2; sqrt($LOSS)" | bc)
-    LOSS=$(echo "scale=2; (10-$LOSS)*10" | bc)
+    LOSS=(`echo "scale=3; 100-$LOSS" | bc `)
+    LOSS=$(echo "scale=3; sqrt($LOSS)" | bc)
+    LOSS=$(echo "scale=3; (10-$LOSS)*10" | bc)
     CFG[11]=${LOSS}%
     CFG[12]=${LOSS}%
     CFG[15]="." 
@@ -2642,10 +2480,10 @@ fi
 # Sumaryczne opóźnienie podzielone na oba kierunki
 if [[ -n ${CFG[36]} ]] ; then
   chk_delay 36
-  DELAY=`echo ${CFG[36]} | awk -Fm '{print $1}'`
-  CFG[13]=`echo "scale=2; $DELAY/2" | bc `
-  CFG[13]=${CFG[13]}ms
-  CFG[14]=${CFG[13]}
+  DELAY=(`echo ${CFG[36]} | awk -Fm '{print $1}'`)
+  DELAY=(`echo "scale=3; $DELAY/2" | bc `)
+  CFG[13]=${DELAY}ms
+  CFG[14]=${DELAY}ms
   CFG[15]="." 
 fi
 
@@ -2656,9 +2494,9 @@ if [[ -n ${CFG[37]} ]] ; then
   chk_duplic 37
   if [[ -n $ANS1 ]] ; then
     DUPLIC=(`echo ${CFG[37]} | awk -F% '{print $1}'`)
-    DUPLIC=(`echo "scale=2; 100-$DUPLIC" | bc `)
-    DUPLIC=$(echo "scale=2; sqrt($DUPLIC)" | bc)
-    DUPLIC=$(echo "scale=2; (10-$DUPLIC)*10" | bc)
+    DUPLIC=(`echo "scale=3; ($DUPLIC/100)+1" | bc `)
+    DUPLIC=$(echo "scale=3; sqrt($DUPLIC)" | bc)
+    DUPLIC=$(echo "scale=3; ($DUPLIC-1)*100" | bc)
     CFG[28]=${DUPLIC}%
     CFG[29]=${DUPLIC}%
     CFG[15]="." 
@@ -2688,8 +2526,7 @@ fi
 
 # ----  Wyświetlenie parametrów łącza <qoslink>
 if [[ -n ${CFG[38]} ]] ; then
-  CFG[21]="0"			# włącza wyświetlanie komunikatów pomimo  braku opcji -v
-  if [[ "${CFG[38]}" = "printallcnt" ]] ; then	
+  if [[ "${CFG[38]}" = "setdefault" ]] ; then	
     prn_allcontainer
   else
     prn_container "${CFG[38]}"
@@ -2711,7 +2548,7 @@ fi
 
 # ----  Odczyt parametrów sieci
 if [[ -n ${CFG[40]} ]] ; then
-  if [[ "${CFG[40]}" = "noname" ]] ; then
+  if [[ "${CFG[40]}" = "setdefault" ]] ; then
     msg "${Y}Nie podano nazwy pliku${BCK}"
     exit 0
   else
@@ -2754,48 +2591,48 @@ if [[ -n ${CFG[17]} ]] ; then
 fi
 
 # -----  Weryfikacja interfejsu  IF1 w H1  -----
-if [[ -n ${CFG[3]} ]] ; then
+if [[ -n ${CFG[3]} && `checkhost ${CFG[1]}` ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[1]}" ; then
     die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF2 w H2  -----
-if [[ -n ${CFG[4]} ]] ; then
+if [[ -n ${CFG[4]} && `checkhost ${CFG[2]}` ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[2]}" ; then
     die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF1 w R1  -----
-if [[ -n ${CFG[3]} ]] ; then
+if [[ -n ${CFG[3]} && `checkhost ${CFG[18]}` ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[18]}" ; then
     die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[18]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF2 w R2  -----
-if [[ -n ${CFG[4]} ]] ; then
+if [[ -n ${CFG[4]} && `checkrouter ${CFG[19]}` ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[19]}" ; then
     die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[19]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF3  -----
-if [[ -n ${CFG[25]} ]] ; then
-  if checkinterface "${CFG[25]}" "${CFG[0]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if3 ${CFG[25]} jest już utworzona w kontenerze ${CFG[0]}"
-  fi
-fi
-
-# -----  Weryfikacja interfejsu  IF4  -----
-if [[ -n ${CFG[26]} ]] ; then
-  if checkinterface "${CFG[26]}" "${CFG[0]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if4 ${CFG[26]} jest już utworzona w kontenerze ${CFG[0]}"
-  fi
-fi
-
-
+#if [[ -n ${CFG[25]} ]] ; then
+#  if checkinterface "${CFG[25]}" "${CFG[0]}" ; then
+#    die 5 "Nazwa interfejsu z opcji -if3 ${CFG[25]} jest już utworzona w kontenerze ${CFG[0]}"
+#  fi
+#fi
+#
+## -----  Weryfikacja interfejsu  IF4  -----
+#if [[ -n ${CFG[26]} ]] ; then
+#  if checkinterface "${CFG[26]}" "${CFG[0]}" ; then
+#    die 5 "Nazwa interfejsu z opcji -if4 ${CFG[26]} jest już utworzona w kontenerze ${CFG[0]}"
+#  fi
+#fi
+#
+#
 # ----  Weryfikacja poprawności IP1
 if [[ -n ${CFG[5]} ]] ; then
   if ! parseip ${CFG[5]}  ; then
@@ -2809,21 +2646,21 @@ if [[ -n ${CFG[6]} ]] ; then
     die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
-set -x
+
 # ----  Weryfikacja poprawności GW1
-if [[ -n ${CFG[30]} ]] ; then
+if [[ -n ${CFG[30]} && "${CFG[30]}" != "setdefault" ]] ; then
   if ! chk_gw ${CFG[30]}  ; then
     die 8 "Niepoprawny format parametru bramy dla -gw1. (format: x.y.z.v)"
   fi
 fi
 
 # ----  Weryfikacja poprawności GW2
-if [[ -n ${CFG[31]} ]] ; then
+if [[ -n ${CFG[31]} && "${CFG[31]}" != "setdefault" ]] ; then
   if ! chk_gw ${CFG[31]}  ; then
     die 8 "Niepoprawny format parametru bramy dla -gw2. (format: x.y.z.v)"
   fi
 fi
-set +x
+
 # Podgląd tablicy z parametrami
 # ---------------------
 #for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
