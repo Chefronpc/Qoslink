@@ -1154,12 +1154,10 @@ crt_r1() {
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[18]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[18]}"
-    NEWROUTER="new"	# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
-    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+    return	
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[18]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[18]}${BCK} z adresem ${Y}${CFG[5]}${BCK}"
-  NEWROUTER="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 # -----  Uruchomienie kontenera -r2 - Router Quagga ( QoSQuagga )
@@ -1169,13 +1167,10 @@ crt_r2() {
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[19]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie routera Quagga w kontenerze ${CFG[19]}"
-    NEWROUTER="new"		# znacznik nowego routera - wymagany przy tworzeniu ID-Routera
-    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+    return
   fi
   msg "Router Quagga w kontenerze ${Y}${CFG[19]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[19]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
-  NEWROUTER="old"		# Jeżeli już był uruchomiony -> znacznik umozliwiający
-			# pozostawienie istniejącego ID-routera
 }
 
 # -----  Uruchomienie kontenera -ph1 - Łącza PhLink do hosta fizycznego
@@ -1185,12 +1180,10 @@ crt_ph1() {
     ANS=(` docker exec ${CFG[32]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[32]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie łącza phlink w kontenerze ${CFG[32]}"
-    NEWPHLINK="new"	# znacznik nowego łącza phlink - wymagany przy tworzeniu ID-Routera
-    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+    return
   fi
   msg "Łącze PhLink w kontenerze ${Y}${CFG[32]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[32]}${BCK} z adresem ${Y}${CFG[5]}${BCK}"
-  NEWPHLINK="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 # -----  Uruchomienie kontenera -ph2 - Łącza PhLink do hosta fizycznego
@@ -1200,12 +1193,10 @@ crt_ph2() {
     ANS=(` docker exec ${CFG[33]} /bin/bash -c 'service zebra start && service ospfd start' `)
     ANS=(` docker exec ${CFG[33]} /bin/bash -c 'vtysh -e "configure terminal" -e "log file /var/log/quagga/quagga.log" -e "exit" -e "write" ' `)
     msg "Uruchomienie łącza phlink w kontenerze ${CFG[33]}"
-    NEWPHLINK="new"	# znacznik nowego łącza phlink - wymagany przy tworzeniu ID-Routera
-    return		# jeżeli nowy -> tworzy ID-Routera wg nr IP
+    return
   fi
   msg "Łącze PhLink w kontenerze ${Y}${CFG[33]} jest już w systemie${BCK}"
   msg "Skonfigurowany zostanie ${Y}dodatkowy interfejs w ${CFG[33]}${BCK} z adresem ${Y}${CFG[6]}${BCK}"
-  NEWPHLINK="old"	# Jeżeli już był uruchomiony -> pozostawia istniejący ID-routera
 }
 
 
@@ -1263,8 +1254,6 @@ crt_linkif1r1() {
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
-  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
-  ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
@@ -1280,8 +1269,6 @@ crt_linkif2r2() {
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
-  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
-  ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
@@ -1298,8 +1285,6 @@ crt_linkif1ph1() {
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
-  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
-  ID=(`echo ${CFG[5]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[32]}"
@@ -1316,8 +1301,6 @@ crt_linkif2ph2() {
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
-  # Utworzenie ID routera na podstawie adresu IP - gwarancja niepowtarzalności
-  ID=(`echo ${CFG[6]} | awk -F'/' '{print $1}' `)
   # Konfiguracja daemona OSPF w routerze
   ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" -c "exit" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[33]}"
@@ -1374,10 +1357,10 @@ crt_linkif4sw2() {
 crt_brinqos() {
   msg "Utworzenie bridga br0 w kontenerze ${CFG[0]} mostkujący interfejsy ${CFG[25]} oraz ${CFG[26]}"
   msg "Adres ip ${G}${CFG[0]}${BCK} to ${G}${CFG[23]}${BCK}.  Adres ip ${G}${CFG[24]}${BCK} zostaje ${G}wolny${BCK}."
-#  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
-#  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
-#  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
-#  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
+  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[25]}`)
+  ANS=(`docker exec ${CFG[0]} ip addr flush dev ${CFG[26]}`)
+  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[25]} up`)
+  ANS=(`docker exec ${CFG[0]} ip link set dev ${CFG[26]} up`)
   ANS=(`docker exec ${CFG[0]} brctl addbr br0`)
   ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[25]}`)
   ANS=(`docker exec ${CFG[0]} brctl addif br0 ${CFG[26]}`)
@@ -1390,12 +1373,18 @@ set_link() {
   msg "Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
   msg "Sumaryczne:  Pasmo ${G}${CFG[34]}${BCK}  opóźnienie ${G}${CFG[36]}${BCK} utrata pakietów ${G}${CFG[35]}${BCK} duplikowanie ${G}${CFG[37]}${BCK}"
+# set -x
 
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 handle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${CFG[9]} latency 50ms burst 20k `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${CFG[10]} latency 50ms burst 20k `)
 
+#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 1ms burst 10k peakrate 10kbit mtu 1518`)
+#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 1ms burst 10k peakrate 10kbit mtu 1518`)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1: handle 2: netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1: handle 2: netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 ahndle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+#set +x
   BUF=""
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
     if [[ -z ${CFG[$CNT]} ]] ; then
@@ -1472,10 +1461,10 @@ upgrade_link() {
   msg "Pasmo ${G}${CFG2[9]}/${CFG2[10]}${BCK} z opóżnieniem ${G}${CFG2[13]}/${CFG2[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG2[11]}/${CFG2[12]}${BCK}  duplikowanie ${G}${CFG2[28]}/${CFG2[29]}${BCK}"
   msg "Sumaryczne: Pasmo ${G}${CFG2[34]}${BCK}  opóźnienie ${G}${CFG2[36]}${BCK} utrata pakietów ${G}${CFG2[35]}${BCK} duplikowanie ${G}${CFG2[37]}${BCK}"
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1:0 tbf rate ${CFG2[9]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1:0 tbf rate ${CFG2[10]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1:1 handle 10:0 netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1:1 handle 10:0 netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1: tbf rate ${CFG2[9]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${CFG2[10]} latency 100ms burst 50k`)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1: handle 2: netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
+  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1: handle 2: netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
 
   BUF=""
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
@@ -1563,22 +1552,22 @@ LINK=( 10Mbps 100Mbps 1Gbps ADSL3/8 ISDNBRI SDI 802.11b 802.11a 802.11g 802.11n 
 checklink() {
 case "$1" in
   "10Mbps")
-    CFG[9]=10Mbit   ; CFG[10]=10Mbit
+    CFG[9]=10mbit   ; CFG[10]=10mbit
     CFG[11]=0%      ; CFG[12]=0%
-    CFG[13]=0.3ms   ; CFG[14]=0.3ms
-    CFG[28]=0.01%  ; CFG[29]=0.01% 
+    CFG[13]=0.15ms   ; CFG[14]=0.15ms
+    CFG[28]=0%  ; CFG[29]=0% 
     ;;
   "100Mbps")
-    CFG[9]=100Mbit  ; CFG[10]=100Mbit
+    CFG[9]=100mbit  ; CFG[10]=100mbit
     CFG[11]=0%      ; CFG[12]=0%
-    CFG[13]=0.2ms   ; CFG[14]=0.2ms
-    CFG[28]=0.01%  ; CFG[29]=0.01%
+    CFG[13]=0.06ms   ; CFG[14]=0.06ms
+    CFG[28]=0%  ; CFG[29]=0%
     ;;
   "1Gbps")
     CFG[9]=1000Mbit  ; CFG[10]=1000Mbit
-    CFG[11]=0.01%      ; CFG[12]=0.01%
-    CFG[13]=0.2ms   ; CFG[14]=0.2ms
-    CFG[28]=0.001%  ; CFG[29]=0.001%
+    CFG[11]=0%      ; CFG[12]=0%
+    CFG[13]=0.04ms   ; CFG[14]=0.04ms
+    CFG[28]=0.0001%  ; CFG[29]=0.0001%
     ;;
   "ADSL3/8")
     CFG[9]=3Mbit    ; CFG[10]=8Mbit
@@ -1653,6 +1642,9 @@ upgrade_container() {
       die 61 "Podany kontener <${CFG[20]}> jest zatrzymany"
   
     elif [[ -n $CONTAINERLINK ]] ; then			# Kontener typu qoslink
+      msg "${Y}Przed zmianą:${BCK}"
+      read_dsp_cnt ${CFG[20]}
+      msg "${Y}Po zmianie:${BCK}"
       upgrade_link ${CFG[20]}
       msg "Gotowe."
       exit 0
@@ -2370,7 +2362,7 @@ fi
 # ----  Weryfikacja parametru pasma 1 - BAND1
 # Automatyczna wartość gdy tworzymy nowe łącze i nie podamy danego parametru
 if [[ -z ${CFG[9]} && ! ${CFG[20]} ]] ; then
-  CFG[9]="100Mbit" 
+  CFG[9]="100mbit" 
 else
 # W przeciwnym wypadku sprawdzamy jego poprawność 
   if [[ -n ${CFG[9]} ]] ; then
@@ -2380,7 +2372,7 @@ fi
 
 # ----  Weryfikacja parametru pasma 2 - BAND2
 if [[ -z ${CFG[10]} && ! ${CFG[20]} ]] ; then
-  CFG[10]="100Mbit"
+  CFG[10]="100mbit"
 else
   if [[ -n ${CFG[10]} ]] ; then
     chk_band 10
@@ -2389,7 +2381,7 @@ fi
 
 # ----  Weryfikacja parametru utraty pakietów - LOSS1
 if [[ -z ${CFG[11]} && ! ${CFG[20]} ]] ; then
-  CFG[11]="0.01%"
+  CFG[11]="0%"
 else
   if [[ -n ${CFG[11]} ]] ; then
     chk_loss 11
@@ -2398,7 +2390,7 @@ fi
 
 # ----  Weryfikacja parametru utraty pakietów - LOSS2
 if [[ -z ${CFG[12]} && ! ${CFG[20]} ]] ; then
-  CFG[12]="0.01%"
+  CFG[12]="0%"
 else
   if [[ -n ${CFG[12]} ]] ; then
     chk_loss 12
@@ -2407,7 +2399,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY1
 if [[ -z ${CFG[13]} && ! ${CFG[20]} ]] ; then
-  CFG[13]="0.1ms"
+  CFG[13]="0.05ms"
 else
   if [[ -n ${CFG[13]} ]] ; then
     chk_delay 13
@@ -2416,7 +2408,7 @@ fi
 
 # ----  Weryfikacja parametru opóżnienia - DELAY2
 if [[ -z ${CFG[14]} && ! ${CFG[20]} ]] ; then
-  CFG[14]="0.1ms"
+  CFG[14]="0.05ms"
 else
   if [[ -n ${CFG[14]} ]] ; then
     chk_delay 14
@@ -2425,7 +2417,7 @@ fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC1
 if [[ -z ${CFG[28]} && ! ${CFG[20]} ]] ; then
-  CFG[28]="0.01%"
+  CFG[28]="0%"
 else
   if [[ -n ${CFG[28]} ]] ; then
     chk_duplic 28
@@ -2434,7 +2426,7 @@ fi
 
 # ----  Weryfikacja parametru duplicowania - DUPLIC2
 if [[ -z ${CFG[29]} && ! ${CFG[20]} ]] ; then
-  CFG[29]="0.01%"
+  CFG[29]="0%"
 else
   if [[ -n ${CFG[29]} ]] ; then
     chk_duplic 28
@@ -2461,9 +2453,9 @@ if [[ -n ${CFG[35]} ]] ; then
   chk_loss 35
   if [[ -n $ANS1 ]] ; then      # Podawana wartość procentowa
     LOSS=(`echo ${CFG[35]} | awk -F% '{print $1}'`)
-    LOSS=(`echo "scale=3; 100-$LOSS" | bc `)
-    LOSS=$(echo "scale=3; sqrt($LOSS)" | bc)
-    LOSS=$(echo "scale=3; (10-$LOSS)*10" | bc)
+    LOSS=(`echo "scale=5; 100-$LOSS" | bc `)
+    LOSS=$(echo "scale=5; sqrt($LOSS)" | bc)
+    LOSS=$(echo "scale=5; (10-$LOSS)*10" | bc)
     CFG[11]=${LOSS}%
     CFG[12]=${LOSS}%
     CFG[15]="." 
@@ -2494,9 +2486,9 @@ if [[ -n ${CFG[37]} ]] ; then
   chk_duplic 37
   if [[ -n $ANS1 ]] ; then
     DUPLIC=(`echo ${CFG[37]} | awk -F% '{print $1}'`)
-    DUPLIC=(`echo "scale=3; ($DUPLIC/100)+1" | bc `)
-    DUPLIC=$(echo "scale=3; sqrt($DUPLIC)" | bc)
-    DUPLIC=$(echo "scale=3; ($DUPLIC-1)*100" | bc)
+    DUPLIC=(`echo "scale=7; ($DUPLIC/100)+1" | bc `)
+    DUPLIC=$(echo "scale=7; sqrt($DUPLIC)" | bc)
+    DUPLIC=$(echo "scale=7; ($DUPLIC-1)*100" | bc)
     CFG[28]=${DUPLIC}%
     CFG[29]=${DUPLIC}%
     CFG[15]="." 
@@ -2752,8 +2744,8 @@ case "$KOD" in
     freeip $NEWNET
     CFG[24]=$NEWIP
     set_c
-    set_br1
     set_sw2
+    set_br1
     crt_c
     set_h1
     crt_h1
@@ -2791,10 +2783,30 @@ case "$KOD" in
     set_link
     ;;    
 
+28)						# sw1       ---  sw2 + ip2
+    checkipall ${CFG[6]}
+#    freeip ${CFG[6]}
+#    CFG[23]=$NEWIP
+    CFG[23]=${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_sw1
+    set_sw2
+    crt_c
+    set_if3
+    crt_linkif3sw1
+    set_if4
+    crt_linkif4sw2
+    crt_brinqos
+    set_link
+    ;;
+
 44)						# sw1 + ip1 ---  sw2
     checkipall ${CFG[5]}
-    freeip ${CFG[5]}
-    CFG[23]=$NEWIP
+#    freeip ${CFG[5]}
+#    CFG[23]=$NEWIP
+    CFG[23]=${CFG[5]}
     freeip ${CFG[5]}
     CFG[24]=$NEWIP
     set_c
@@ -3378,6 +3390,68 @@ case "$KOD" in
     set_link
     ;;
 
+400)						# h1       ---  ph2 + ip2
+    checkipall ${CFG[6]}
+    freeip ${CFG[6]}
+    CFG[5]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[6]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_h1
+    crt_h1
+    set_ph2
+    crt_ph2
+    set_if1
+    crt_linkif1
+    set_if2ph2
+    crt_linkif2ph2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif2docker0
+    ;;
+
+432)						# h1 + ip1  ---  ph2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_h1
+      crt_h1
+      set_ph2
+      crt_ph2
+      set_if1
+      crt_linkif1
+      set_if2ph2
+      crt_linkif2ph2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+      crt_linkif2docker0
+    else     
+      exit 0
+    fi
+    ;;
+
 264)						# sw1       ---  ph2
     freenet
     freeip $NEWNET
@@ -3548,6 +3622,68 @@ case "$KOD" in
     fi
     ;;
 
+608)						# ph1 + ip1  ---         h2
+    checkipall ${CFG[5]}
+    freeip ${CFG[5]}
+    CFG[6]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[23]=$NEWIP
+    freeip ${CFG[5]}
+    CFG[24]=$NEWIP
+    set_c
+    set_br1
+    set_br2
+    crt_c
+    set_ph1
+    crt_ph1
+    set_h2
+    crt_h2
+    set_if1ph1
+    crt_linkif1ph1
+    set_if2
+    crt_linkif2
+    set_if3
+    crt_linkif3
+    set_if4
+    crt_linkif4
+    crt_brinqos
+    set_link
+    crt_linkif1docker0
+    ;;
+
+624)						# ph1 + ip1  ---  h2 + ip2  
+    comparenet "${CFG[5]}" "${CFG[6]}" "1"
+    if [[ "$NET" -eq "3" ]] ; then
+      checkipall ${CFG[5]}
+      checkipall ${CFG[6]}
+      freeip ${CFG[5]}
+      CFG[23]=$NEWIP
+      freeip ${CFG[6]}
+      CFG[24]=$NEWIP
+      set_c
+      set_br1
+      set_br2
+      crt_c
+      set_ph1
+      crt_ph1
+      set_h2
+      crt_h2
+      set_if1ph1
+      crt_linkif1ph1
+      set_if2
+      crt_linkif2
+      set_if3
+      crt_linkif3
+      set_if4
+      crt_linkif4
+      crt_brinqos
+      set_link
+      crt_linkif1docker0
+    else     
+      exit 0
+    fi
+    ;;
+
 516)						# ph1       ---  sw2
     freenet
     freeip $NEWNET
@@ -3656,7 +3792,7 @@ case "$KOD" in
     crt_linkif1docker0
     ;;
 
-19)						# ph1       ---  r2 + ip2
+529)						# ph1       ---  r2 + ip2
     checkipall ${CFG[6]}
     freeip ${CFG[6]}
     CFG[5]=$NEWIP
@@ -3685,7 +3821,7 @@ case "$KOD" in
     crt_linkif1docker0
     ;;
 
-51)						# ph1 + ip1  ---  r2 + ip2  
+561)						# ph1 + ip1  ---  r2 + ip2  
     comparenet "${CFG[5]}" "${CFG[6]}" "1"
     if [[ "$NET" -eq "3" ]] ; then
       checkipall ${CFG[5]}
