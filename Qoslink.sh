@@ -12,7 +12,7 @@ HOSTPREFIX="host"	# domyslnych hostów
 HOSTMAX=256
 QUAGGAPREFIX="quaggalink" # routerów
 QUAGGAMAX=256
-PHPREFIX="phlink"	# routerów brzegowych
+PHPREFIX="phlink"	# routerów brzegowych ASBR
 PHMAX=256
 IFPREFIX="eth"		# interfejsów w kontenerach
 IFMAX=64
@@ -20,6 +20,10 @@ FILEPREFIX="testsdn"	# Domyślna nazwa pliku
 FILEMAX=1024
 DEFAULTNET="10.0.0.0/24"   # Domyślny adres sieci. Obsluga pełnego zakresu adresacji 
 			   # Zakres obsługiwanej maski <2,29>	
+MTU=1500		
+MTU2=1540		
+BND_WSK=0.9836	       # Wskaznik korygujący przepływ danych przez kolejkę TBF
+#BND_WSK=1	       # Wskaznik korygujący przepływ danych przez kolejkę TBF
 
 R="\e[31m"  		# Kolory komunikatów
 Y="\e[33m"
@@ -90,9 +94,9 @@ crt_dockerfile_quaggalink() {
 #  echo "RUN yum -y update" >> dockerfile
   echo "RUN yum -y install bridge-utils net-tools mtr tar nmap telnet wget tcpdump quagga" >> dockerfile
   
-  echo "RUN echo \"hostname quaggalink\" > /etc/quagga/zebra.conf \\" >> dockerfile
-  echo "&& echo \"hostname quaggalink\" > /etc/quagga/ripd.conf \\" >> dockerfile
-  echo "&& echo \"hostname quaggalink\" > /etc/quagga/ospfd.conf \\" >> dockerfile
+  echo "RUN echo \"hostname $HOSTNAME\" > /etc/quagga/zebra.conf \\" >> dockerfile
+  echo "&& echo \"hostname $HOSTNAME\" > /etc/quagga/ripd.conf \\" >> dockerfile
+  echo "&& echo \"hostname $HOSTNAME\" > /etc/quagga/ospfd.conf \\" >> dockerfile
   echo "&& echo \"password zebra\" >> /etc/quagga/zebra.conf \\" >> dockerfile
   echo "&& echo \"password zebra\" >> /etc/quagga/ripd.conf \\" >> dockerfile
   echo "&& echo \"password zebra\" >> /etc/quagga/ospfd.conf \\" >> dockerfile
@@ -157,7 +161,7 @@ chk_crt_img_qoslink() {
   if [[ -z $LISTIMAGES ]] ; then
     msg "${Y}Brak obrazu kontenera qoslink w lokalnym repozytorium...${BCK}"
     # Sprawdzenie dostępności obrazu qoslink w repo Docker
-    LISTIMAGES=(`docker search qoslink | awk '/chefronpc\/qoslink/ {print}' `)
+    LISTIMAGES=(`docker search chefronpc/qoslink | awk '/chefronpc\/qoslink/ {print}' `)
     if [[ -z $LISTIMAGES ]] ; then
       msg "${Y}Brak obrazu kontenera qoslink w zdalnym repozytorium Dockera${BCK}"
       # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
@@ -178,13 +182,41 @@ chk_crt_img_qoslink() {
   fi
 }
 
+# Sprawdzanie dostępności obrazu hosta w repozytorium lokalnym / ew. utworzenie
+chk_crt_img_host() {
+  # sprawdzenie lokalnego repozytorium
+  LISTIMAGES=(`docker images | awk '/chefronpc\/host/ {print}' `)
+  if [[ -z $LISTIMAGES ]] ; then
+    msg "${Y}Brak obrazu kontenera host w lokalnym repozytorium...${BCK}"
+    # Sprawdzenie dostępności obrazu host w repo Docker
+    LISTIMAGES=(`docker search chefronpc/host | awk '/chefronpc\/host/ {print}' `)
+    if [[ -z $LISTIMAGES ]] ; then
+      msg "${Y}Brak obrazu kontenera host w zdalnym repozytorium Dockera${BCK}"
+      # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
+      chk_crt_img_centos66 
+      # Tworzenie pliku dockerfile dla konfiguracji kontenera Qoslink
+      crt_dockerfile_host
+      msg "Tworzenie kontenera host..."
+      STAT=(`docker build ./dockerfiles/`)
+      IDCon=(`echo ${STAT[@]} | grep Successfully | awk '{ print $(NF) }' `)
+      docker tag $IDCon chefronpc/host:v1
+      msg "Utworzono kontener host"
+      rm -rf ./dockerfiles
+    else
+      # Pobranie obrazu host ze zdalnego repo Docker'a
+      msg "Pobranie obrazu host ze zdalnego repozytorium Dockera"
+      docker pull chefronpc/host:v1
+    fi
+  fi
+}
+
 # Sprawdzanie dostępności obrazu quaggalink w repozytorium lokalnym / ew. utworzenie
 chk_crt_img_quaggalink() {
   LISTIMAGES=(`docker images | awk '/chefronpc\/quaggalink/ {print}' `)
   if [[ -z $LISTIMAGES ]] ; then
     msg "${Y}Brak obrazu kontenera quaggalink w lokalnym repozytorium...${BCK}"
     # Sprawdzenie dostępności obrazu quaggalink w repo Docker
-    LISTIMAGES=(`docker search quaggalink | awk '/chefronpc\/quaggalink/ {print}' `)
+    LISTIMAGES=(`docker search chefronpc/quaggalink | awk '/chefronpc\/quaggalink/ {print}' `)
     if [[ -z $LISTIMAGES ]] ; then
       # Sprawdzenie dostęności obrazu Centos 6.6 i ewentualne utworzenie
       msg "${Y}Brak obrazu kontenera quaggalink w zdalnym repozytorium Dockera${BCK}"
@@ -1125,7 +1157,7 @@ return 0
 # -----------------------------------------------------
 # -----  Uruchomienie kontenera łączącego hosty ( QoSLink )
 crt_c() {
-  ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add NET_ADMIN chefronpc/qoslink:v1 /bin/bash `)
+  ANS=(` docker run -d -ti --name ${CFG[0]} --hostname ${CFG[0]} --net none --cap-add ALL chefronpc/qoslink:v1 /bin/bash `)
   msg "Uruchomienie kontenera łączącego ${CFG[0]}"
 }
 
@@ -1245,64 +1277,76 @@ crt_linkif4() {
 }
 
 crt_linkif1r1() {
+  if [[ -z ${CFG[42]} ]] ; then
+    CFG[42]=1
+  fi
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[18]} ${CFG[5]}
   brctl stp ${CFG[7]} on
-  msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]}"
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem ${CFG[18]} w obszarze ${Y}${CFG[42]}${BCK}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(`docker exec ${CFG[18]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[18]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area ${CFG[42]}" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[18]}"
 }
 
 crt_linkif2r2() {
+  if [[ -z ${CFG[42]} ]] ; then
+    CFG[42]=1
+  fi
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[19]} ${CFG[6]}
   brctl stp ${CFG[8]} on
-  msg "Polaczenie bridg'a -br2 ${CFG[8]} z routerem ${CFG[19]}"
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z routerem ${CFG[19]} w obszarze ${Y}${CFG[42]}${BCK}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[19]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area ${CFG[42]}" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w routerze ${CFG[19]}"
 }
 
 crt_linkif1ph1() {
+  if [[ -z ${CFG[42]} ]] ; then
+    CFG[42]=1
+  fi
   pipework ${CFG[7]} -i ${CFG[3]} ${CFG[32]} ${CFG[5]}
   brctl stp ${CFG[7]} on
-  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
-  msg "Polaczenie bridg'a -br1 ${CFG[7]} z łączem phlink ${CFG[32]}"
+#  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
+  msg "Polaczenie bridg'a -br1 ${CFG[7]} z routerem phlink ${CFG[32]} w obszarze ${Y}${CFG[42]}${BCK}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface ${CFG[3]}" -c "ip address ${CFG[5]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[5]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[5]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" `)
+  ANS=(` docker exec ${CFG[32]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area ${CFG[42]}" -c "exit" -c "exit" -c "write" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[32]}"
 }
 
 crt_linkif2ph2() {
+  if [[ -z ${CFG[42]} ]] ; then
+    CFG[42]=1
+  fi
   pipework ${CFG[8]} -i ${CFG[4]} ${CFG[33]} ${CFG[6]}
   brctl stp ${CFG[8]} on
-  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
-  msg "Polaczenie bridg'a -br2 ${CFG[8]} z łączem phlink ${CFG[33]}"
+#  msg "Polaczenie bridg'a -br2 ${CFG[8]} z kontenerem ${CFG[0]}"
+  msg "Polaczenie bridg'a -br2 ${CFG[8]} z łączem phlink ${CFG[33]} w obszarze ${Y}${CFG[42]}${BCK}"
   # Konfiguracja daemona ZEBRA w routerze    
-  ANS=(`docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
+  ANS=(`docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface ${CFG[4]}" -c "ip address ${CFG[6]}" -c "description to-${CFG[0]}" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${CFG[6]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${CFG[6]} | awk -F/ '{print $2}' `)
   NEWNET="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
   # Konfiguracja daemona OSPF w routerze
-  ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area 1" -c "exit" -c "exit" -c "write" -c "exit" `)
+  ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "router ospf" -c "network $NEWNET area ${CFG[42]}" -c "exit" -c "exit" -c "write" -c "exit" `)
   msg "Konfiguracja daemona ZEBRA oraz OSPF w łączu phlink ${CFG[33]}"
 }
 
@@ -1311,7 +1355,7 @@ crt_linkif1docker0() {
   IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
   msg "Polaczenie łącza phlink ${CFG[32]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-docker0" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
+  ANS=(`docker exec ${CFG[32]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-docker0" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${IPM5} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${IPM5} | awk -F/ '{print $2}' `)
@@ -1327,7 +1371,7 @@ crt_linkif2docker0() {
   IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
   msg "Polaczenie łącza phlink ${CFG[33]}"
   # Konfiguracja daemona ZEBRA w routerze
-  ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-${IP5}" -c "ip ospf hello-interval 5" -c "ip ospf dead-interval 10" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
+  ANS=(` docker exec ${CFG[33]} vtysh -c "configure terminal" -c "interface eth0" -c "ip address ${IPM5}" -c "description to-${IP5}" -c "ip ospf hello-interval 10" -c "ip ospf dead-interval 20" -c "no shutdown" -c "exit" -c "exit" -c "write" -c "exit" `)
   # Odczytanie adresu sieci na podstawie IP i Maski
   NET1=(` ipcalc ${IPM5} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   M1=(`echo ${IPM5} | awk -F/ '{print $2}' `)
@@ -1368,23 +1412,104 @@ crt_brinqos() {
   ANS=(`docker exec ${CFG[0]} ip link set dev br0 up`)
 }
 
+
 set_link() {
+
   msg "Kofiguracja parametrów łącza:"
   msg "Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
   msg "Sumaryczne:  Pasmo ${G}${CFG[34]}${BCK}  opóźnienie ${G}${CFG[36]}${BCK} utrata pakietów ${G}${CFG[35]}${BCK} duplikowanie ${G}${CFG[37]}${BCK}"
-# set -x
 
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${CFG[9]} latency 50ms burst 20k `)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${CFG[10]} latency 50ms burst 20k `)
 
-#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1:0 tbf rate ${CFG[9]} latency 1ms burst 10k peakrate 10kbit mtu 1518`)
-#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1:0 tbf rate ${CFG[10]} latency 1ms burst 10k peakrate 10kbit mtu 1518`)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1: handle 2: netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
-  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1: handle 2: netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
-#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1:1 ahndle 10:0 netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
-#  ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1:1 handle 10:0 netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
-#set +x
+  BND1=(`echo ${CFG[9]} | grep -Eo '([0-9]+.[0-9]+|[0-9]+)' | head -n 1`)
+  BRST1=(`echo "scale=2; (${BND1}/10)" | bc `)
+  BND2=(`echo ${CFG[10]} | grep -Eo '([0-9]+.[0-9]+|[0-9]+)' | head -n 1`)
+  BRST2=(`echo "scale=2; (${BND2}/10)" | bc `)
+
+    JD=$( echo ${CFG[9]} | grep -Eo '[0-9]bit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="bit"
+       JD1=""
+       if [ "$BND1" -lt "15500000" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[9]} | grep -Eo '[0-9]kbit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="kbit"
+       JD1=""
+       if [ "$BND1" -lt "15500" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[9]} | grep -Eo '[0-9]mbit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="mbit"
+       JD1="k" 
+       if [ "$BND1" -lt "16" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[9]} | grep -Eo '[0-9]gbit' )
+    if [ -n "$JD" ] ; then 
+       JDB="gbit"
+       JD1="m" 
+    fi
+
+    JD=$( echo ${CFG[10]} | grep -Eo '[0-9]bit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="bit"
+       JD2=""
+       if [ "$BND2" -lt "15500000" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[10]} | grep -Eo '[0-9]kbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="kbit"
+       JD2=""
+       if [ "$BND2" -lt "15500" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[10]} | grep -Eo '[0-9]mbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="mbit"
+       JD2="k" 
+       if [ "$BND2" -lt "16" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG[10]} | grep -Eo '[0-9]gbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="gbit"
+       JD2="m" 
+    fi
+
+
+
+    BND1=(`echo "scale=3; (${BND1}*${BND_WSK}*1)" | bc `)
+    BND1=${BND1}${JDB1}
+    BND2=(`echo "scale=3; (${BND2}*${BND_WSK}*1)" | bc `)
+    BND2=${BND2}${JDB2}
+    BRST1=${BRST1}${JD1}
+    BRST2=${BRST2}${JD2}
+
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${BND1} burst $BRST1 latency 2ms mpu 64 `)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${BND2} burst $BRST2 latency 2ms mpu 64 `)
+
+#ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} latency 2ms mpu 64 `)
+#ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} latency 2ms mpu 64 `)
+
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} parent 1: handle 2: netem delay ${CFG[13]} loss ${CFG[11]} duplicate ${CFG[28]} `)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1: handle 2: netem delay ${CFG[14]} loss ${CFG[12]} duplicate ${CFG[29]} `)
+
   BUF=""
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
     if [[ -z ${CFG[$CNT]} ]] ; then
@@ -1396,6 +1521,7 @@ set_link() {
   echo $BUF > buffor_cfg.dat
   docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
   rm -f buffor_cfg.dat
+
 }
 
 
@@ -1461,10 +1587,110 @@ upgrade_link() {
   msg "Pasmo ${G}${CFG2[9]}/${CFG2[10]}${BCK} z opóżnieniem ${G}${CFG2[13]}/${CFG2[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG2[11]}/${CFG2[12]}${BCK}  duplikowanie ${G}${CFG2[28]}/${CFG2[29]}${BCK}"
   msg "Sumaryczne: Pasmo ${G}${CFG2[34]}${BCK}  opóźnienie ${G}${CFG2[36]}${BCK} utrata pakietów ${G}${CFG2[35]}${BCK} duplikowanie ${G}${CFG2[37]}${BCK}"
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1: tbf rate ${CFG2[9]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${CFG2[10]} latency 100ms burst 50k`)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1: handle 2: netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
-  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1: handle 2: netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
+
+  
+  BND1=(`echo ${CFG2[9]} | grep -Eo '([0-9]+.[0-9]+|[0-9]+)' | head -n 1`)
+  BRST1=(`printf '%.3f\n' "$(echo "scale=4; (${BND1}/10)" | bc)" `)
+  BND2=(`echo ${CFG2[10]} | grep -Eo '([0-9]+.[0-9]+|[0-9]+)' | head -n 1`)
+  BRST2=(`printf '%.3f\n' "$(echo "scale=4; (${BND2}/10)" | bc)" `)
+#echo $BND1
+#echo $BND2
+#echo $BRST1
+#echo $BRST2   
+    JD=$( echo ${CFG2[9]} | grep -Eo '[0-9]bit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="bit"
+       JD1=""
+       if [ "$BND1" -lt "15500000" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[9]} | grep -Eo '[0-9]kbit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="kbit"
+       JD1=""
+       if [ "$BND1" -lt "15500" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[9]} | grep -Eo '[0-9]mbit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="mbit"
+       JD1="k" 
+       if [ "$BND1" -lt "16" ] ; then 
+         JD1="" 
+         BRST1=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[9]} | grep -Eo '[0-9]gbit' )
+    if [ -n "$JD" ] ; then 
+       JDB1="gbit"
+       JD1="m" 
+    fi
+
+    JD=$( echo ${CFG2[10]} | grep -Eo '[0-9]bit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="bit"
+       JD2=""
+       if [ "$BND2" -lt "15500000" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[10]} | grep -Eo '[0-9]kbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="kbit"
+       JD2=""
+       if [ "$BND2" -lt "15500" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[10]} | grep -Eo '[0-9]mbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="mbit"
+       JD2="k" 
+       if [ "$BND2" -lt "16" ] ; then 
+         JD2="" 
+         BRST2=$MTU2
+       fi
+    fi
+    JD=$( echo ${CFG2[10]} | grep -Eo '[0-9]gbit' )
+    if [ -n "$JD" ] ; then 
+       JDB2="gbit"
+       JD2="m" 
+    fi
+
+
+
+    BND1=(`printf '%.5f\n' "$(echo "scale=5; (${BND1}*${BND_WSK}*1)" | bc)" `)
+    BND1=${BND1}${JDB1}
+    BND2=(`printf '%.5f\n' "$(echo "scale=5; (${BND2}*${BND_WSK}*1)" | bc)" `)
+    BND2=${BND2}${JDB2}
+    BRST1=${BRST1}${JD1}B
+    BRST2=${BRST2}${JD2}B
+
+echo $BND1
+echo $BND2
+echo $BRST1
+echo $BRST2  
+
+# veth1pl13138
+#10000 287
+#
+#
+#
+
+#  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${BND2} burst $BRT limit 1540 mpu 64 `)
+
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} latency 2ms mpu 64 `)
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} latency 2ms mpu 64 `)
+
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1: handle 2: netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1: handle 2: netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
+
 
   BUF=""
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
@@ -1483,7 +1709,7 @@ upgrade_link() {
 # We -  -band
 # ---------------------------------------
 chk_band() {
-  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?[MmKk]bit$"`)
+  ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?[MmKkgG]bit$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])bit$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
     die 60 "Niepoprawny format parametru ${WSK[$1]}"
@@ -1537,6 +1763,19 @@ chk_gw() {
     return 0		# IP/mask poprawne
   else
     return 1		# IP/mask błędne
+  fi
+}
+
+# Sprawdza poprawności parametru -A
+# We -  -A
+# Wy - status 0-OK   1-Błąd
+# ------------------------------------
+chk_a() {
+  ANS1=(`echo $1 | grep -E "^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\$"`)
+  if [[ -n $ANS1 ]] ; then
+    return 0		# Liczba całkowita - poprawna
+  else
+    return 1		# Błędny format
   fi
 }
 
@@ -1992,8 +2231,8 @@ save_container() {
     fi
   fi
   if [ -e "${CFG[39]}.dat" ] ; then
-    msg "${Y}Istnieje już plik o nazwie ${G}${CFG[39]}.dat${BCK}"
-    msg "${Y}Zostanie wykonany backup poprzedniej wersji jako ${G}${CFG[39]}.bck${BCK}"
+    msg "${Y}Istnieje plik o nazwie: ${G}${CFG[39]}.dat${BCK}"
+    msg "${Y}Backup poprzedniej wersji: ${G}${CFG[39]}.bck${BCK}"
     cp -f ${CFG[39]}.dat ${CFG[39]}.bck
     rm -f ${CFG[39]}.dat
   fi 
@@ -2246,8 +2485,8 @@ load_container() {
 # ---------------------------------------------------------------------------------------------
 #
 #   Tablica z dostępnymi opcjami i parametrami wejściowymi dla skryptu
-#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 | 41 )
-WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -s   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L   -? )
+#   | 0 | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9    | 10   | 11   | 12   | 13    | 14    | 15  | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28     | 29     | 30 | 31 | 32 | 33 | 34  | 35  | 36   | 37    | 38 | 39 | 40 | 41 | 42 )
+WSK=(-c  -h1  -h2  -if1 -if2 -ip1 -ip2 -br1 -br2 -band1 -band2 -loss1 -loss2 -delay1 -delay2 -link -sw1 -sw2 -r1  -r2  -U   -s   -V   -ip3 -ip4 -if3 -if4 -D   -duplic1 -duplic2 -gw1 -gw2 -ph1 -ph2 -band -loss -delay -duplic -P   -S   -L   -?   -A )
 
 # Kopiowanie parametrów do tablicy PARAM[]. Możliwe więcej niż 9 danych wejściowych.
 # ----------------------------------------------------------------------------------
@@ -2262,32 +2501,46 @@ done
 
 # Uporządkowanie wejściowych parametrów z tablicy PARAM[] do CFG[] według pozycji w WSK[].
 # ----------------------------------------------------------------------------
+# Petla po wszystkich parametrach wejsciowych
 for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   STAT=0				# Znacznik zatrzymujący sortowanie w przypadku nieznanej opcji
+  # Petla po wszystkich typach parametrów w WSK
+  # Krzyżowe sprawdzanie każdego z każdym elementem 
   for (( CNT2=0; CNT2<${#WSK[@]}; CNT2++ )) ; do 
     if [[ "${PARAM[$CNT]}" = "${WSK[$CNT2]}" ]] ; then
       MV=0				# Znacznik przesuniecia o 1 lub 2 miejsca pętli CNT
-      STAT=1
+      STAT=1				# Rozpoznano prawidłową opcję
       CFG[$CNT2]=${PARAM[$CNT+1]}
-      CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru 
-      CFGNEXT=${CFGNEXT:0:1}		# "-" lub pusty ciąg oznacza brak argumentu 
+      CFGNEXT=${CFG[$CNT2]}		# Pierwszy znak następnego parametru "-"
+      CFGNEXT=${CFGNEXT:0:1}		# lub pusty ciąg oznacza brak argumentu 
       					# w bieżacym parametrze (np. -sw1 -h2 serwer
-	
+      # Parametry mogace wystepować bez argumentów	
       PARAM_AUTO="_-h1_-h2_-r1_-r2_-ph1_-ph2_-sw1_-sw2_-gw1_-gw2_-D_-P_-U_-S_-L_"
 
       ANS=(` echo $PARAM_AUTO | grep "_${PARAM[$CNT]}_" `)
-      if [[ -n $ANS ]] ; then		
+
+      # Warunek czy dany parametr może być bezargumentowy
+      if [[ -n $ANS ]] ; then 
+
+	# Jeżeli tak, czy jest za nim kolejny argument
         if [[ -n ${CFG[$CNT2]} ]] ; then
+
+	  # Jeżeli tak, czy kolejna pozycja jest ocją czy wartością
           if [[ "$CFGNEXT" = "-" ]] ; then
+
+	    # Jeżeli opcją to oznacza bieżacy parametr za bezargumentowy
+	    # i przypisanie dumyslnej nazwy
             CFG[$CNT2]="setdefault"
             MV=1			# Opcja jednoargumentowa
           fi
         else
+	  # Jeżeli jest to ostatnia pozycja to jest to opcja bezargementowa
           CFG[$CNT2]="setdefault"
           MV=1				# Opcja jednoargumentowa na końcu 
         fi				# listy parametrów
       fi
 
+      # Opcje wyłącznie bezargumentowe
       if [ ${PARAM[$CNT]} = "-s" ] ; then		# Wyswietlanie komunikatow
         CFG[$CNT2]=0
         MV=1
@@ -2298,17 +2551,19 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         MV=1
       fi
 
+      
       if [ "$MV" -eq "1" ] ; then
-        MV=0
+        MV=0			# Opcja bezargumentowa 
       else
-        let CNT=CNT+1 		# Przesunięcie indeksu przy opcji 2 argumentowej
+        let CNT=CNT+1 		# Przesunięcie indeksu przy opcji argumentowej
         MV=0
       fi
     fi
   done
   
-  CFGIT=${PARAM[$CNT]}	# Weryfikacja poprawności nazwy opcji
-  CFGIT=${CFGIT:0:1}	# Jeżeli jest z "-" i nie ma w tablicy WSK[] => błąd	
+  CFGIT=${PARAM[$CNT]}	# Weryfikacja poprawności nazwy opcji z następnej pozycji
+  CFGIT=${CFGIT:0:1}	
+  # Jeżeli jest z "-" i nie ma w tablicy WSK[] => błąd	
   if [[ "$STAT" = "0" && "$CFGIT" = "-" ]] ; then
     die 69 "Podano nieprawidłową opcję : ${PARAM[$CNT]}"
   fi
@@ -2319,7 +2574,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   if [[ "${CNT1}" -ne "${#PARAM[@]}" ]] ; then
     if [[ "${PARAMTHIS}" != "-" ]] ; then # Wykrywa wprowadzane dane (np. host1) nie przyporzadkowane
                                         # do żadnej opcji  np. -v -r1 router host1 -ip1 10.0.0.2/24
-      die 98 "Nie podano nawzy opcji dla wprowadzonej danej \"${PARAM[CNT1]}\""
+      die 98 "Nie podano nazwy opcji dla wprowadzonej danej \"${PARAM[CNT1]}\""
     fi
   fi
 done
@@ -2328,6 +2583,7 @@ done
 # ---------------------------------------------------------------------------
 chk_crt_img_qoslink
 chk_crt_img_quaggalink
+chk_crt_img_host
 
 # Podgląd tablicy CFG[]
 # ---------------------
@@ -2652,6 +2908,14 @@ if [[ -n ${CFG[31]} && "${CFG[31]}" != "setdefault" ]] ; then
     die 8 "Niepoprawny format parametru bramy dla -gw2. (format: x.y.z.v)"
   fi
 fi
+
+# ----  Weryfikacja poprawności A
+if [[ -n ${CFG[42]} ]] ; then
+  if ! chk_a ${CFG[42]}  ; then
+    die 8 "Niepoprawny format parametru strefy dla -A. Liczba całkowita > 0"
+  fi
+fi
+
 
 # Podgląd tablicy z parametrami
 # ---------------------
