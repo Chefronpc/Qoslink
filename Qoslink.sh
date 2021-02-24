@@ -53,7 +53,7 @@ msg2 () {                       # Komunikaty debugowania wyswietlane przy ustawi
 }
 
 err () {
-#  if [[ ${CFG[22]} ]] ; then   # Ustawić prawidlowy numer $CFG[xx]
+#  if [[ ${CFG[22]} ]] ; then   
    echo -e "${R}$1${BCK}" >&2
    echo -e "${R}$2${BCK}" >&2
    echo -e "${R}$3${BCK}" >&2
@@ -64,6 +64,11 @@ die () {
   shift
   err "$@"
   exit "$status"
+}
+
+view_help() {
+msg "Składnia:"
+exit 0
 }
 
 crt_dockerfile_qoslink() {
@@ -116,7 +121,7 @@ crt_dockerfile_quaggalink() {
   echo "&& rm -f iperf_2.0.2-4_amd64.tar.gz" >> dockerfile
   cd ../
 }
-:
+
 chk_crt_img_centos66() {
   LISTIMAGES=(`docker images | awk '/centos[[:space:]]*6\.6/ {print}' `)
   # Sprawdzenie obecności obrazu Centos 6.6 w lokalnym repozytorium
@@ -129,14 +134,14 @@ chk_crt_img_centos66() {
         mv centos-6-20150615_2019-docker.tar.xz\?raw\=true centos-6-20150615_2019-docker.tar.xz
         rm -f ./wgetcentos.log
       else
-        die 82 "Błąd przy pobieraniu obrazu Centos 6.6"
+        die 50 "Błąd przy pobieraniu obrazu Centos 6.6"
       fi 
     fi
     if [ ! -e "./Dockerfile" ] ; then
       wget https://github.com/CentOS/sig-cloud-instance-images/raw/311d80f2e558eba3a6ea88c387714ae2e4175702/docker/Dockerfile > ./wgetdockerfile.log 2>&1
       STAT2=(`cat ./wgetdockerfile.log | grep "saved"`)
       if [[ ! -n $STAT2 ]] ; then
-        die 83 "Błąd przy pobieraniu pliku Dockerfile dla systemu Centos 6.6"
+        die 51 "Błąd przy pobieraniu pliku Dockerfile dla systemu Centos 6.6"
       fi
       rm -f ./wgetdockerfile.log
     fi
@@ -149,7 +154,7 @@ chk_crt_img_centos66() {
       rm -f centos-6-20150615_2019-docker.tar.xz
       rm -f Dockerfile
     else
-      die 84 "Błąd przy budowaniu obrazu Centos 6.6"
+      die 52 "Błąd przy budowaniu obrazu Centos 6.6"
     fi
   fi
 }
@@ -243,36 +248,32 @@ chk_crt_img_quaggalink() {
 checkbridge() {
 
 #  LISTALL=(`nmcli d | awk '{ print $1 }'`)
-  LISTALL=(`nmcli d | grep $1 `)
-#  ISBRIDGE=(`nmcli d | grep " bridge " | grep $1 | awk '{ print $1 }'`)
-  ISBRIDGE=(`nmcli d | grep " bridge " | grep $1`)
+  LISTALL=(`nmcli d | grep -w $1 `) 
+#  ISBRIDGE=(`nmcli d | grep -w "bridge" | grep -w $1 | awk '{ print $1 }'`)
+  ISBRIDGE=(`nmcli d | grep -w "bridge" | grep -w $1`)
   if [[ -n $LISTALL ]] ; then  
     if [[ -n $ISBRIDGE ]] ; then 
-      die 66 "Bridge o nazwie $1 jest już utworzony w systemie."
+      die 10 "Bridge o nazwie $1 jest już utworzony w systemie."
     else
-      die 67 "Podano nazwę bridga zajętą już przez inny interfejs w systemie."
+      die 11 "Podano nazwę bridga zajętą już przez inny interfejs w systemie."
     fi
   else
-    if [[ -n $ISBRIDGE ]] ; then
-      return 0		# Nazwa bridga zajęta
-    else 			
-      return 1		# Podana nazwa bridga jest wolna w systemie
-    fi
+    return 1		# Podana nazwa bridga jest wolna w systemie
   fi
-  die 68 "Błąd w funkcji checkbridge"
+  die 90 "Błąd w funkcji checkbridge"
 }
 
 # Zwraca numer pierwszego wolnego bridga
 # Wy - nazwa bridga
 # ------------------------------
 freebridge() {
-  LISTBRIDGE=(`nmcli d | grep $BRPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
+  LISTBRIDGE=(`nmcli d | grep -w $BRPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
   for (( CNT=0; CNT<$BRMAX; CNT++ )) ; do
     PASS=0
     if [[ "$BRPREFIX$CNT" = "${CFG[7]}" || "$BRPREFIX$CNT" = "${CFG[8]}" ]] ; then
       PASS=1
     fi
-    ANS=(`echo ${LISTBRIDGE[@]} | grep $BRPREFIX$CNT `)
+    ANS=(`echo ${LISTBRIDGE[@]} | grep -w $BRPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then 
       PASS=1
     fi
@@ -281,7 +282,7 @@ freebridge() {
       return 0
     fi
   done
-  die 6 "Brak wolnych bridg'y"
+  die 12 "Brak wolnych bridg'y"
 }
 
 # Sprawdza dostępność switcha
@@ -301,13 +302,13 @@ checkswitch() {
 # Wy - nazwa switcha
 # ------------------------------
 freeswitch() {
-  LISTSWITCH=(`nmcli d | grep $SWPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
+  LISTSWITCH=(`nmcli d | grep -w $SWPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
   for (( CNT=0; CNT<$SWMAX; CNT++ )) ; do
     PASS=0
     if [[ "$SWPREFIX$CNT" = "${CFG[16]}" || "$SWPREFIX$CNT" = "${CFG[17]}" ]] ; then
       PASS=1
     fi
-    ANS=(`echo ${LISTSWITCH[@]} | grep $SWPREFIX$CNT `)
+    ANS=(`echo ${LISTSWITCH[@]} | grep -w $SWPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then 
       PASS=1
     fi
@@ -316,7 +317,7 @@ freeswitch() {
       return 0
     fi
   done
-  die 6 "Brak wolnych switch'y"
+  die 13 "Brak wolnych switch'y"
 }
 
 # Sprawdza dostępność kontenera
@@ -339,7 +340,7 @@ freecontainer() {
   LISTCONTAINER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT=0; CNT<$QOSMAX; CNT++ )) ; do
     PASS=0 
-    ANS=(`echo ${LISTCONTAINER[@]} | grep $QOSPREFIX$CNT `)
+    ANS=(`echo ${LISTCONTAINER[@]} | grep -w $QOSPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then
       PASS=1
     fi
@@ -348,7 +349,7 @@ freecontainer() {
       return 0
     fi
   done
-  die 5 "Brak wolnych kontenerów"
+  die 14 "Brak wolnych kontenerów"
 }
 
 # Sprawdza dostępność Hosta
@@ -371,7 +372,7 @@ freehost() {
   LISTHOST=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT=0; CNT<$HOSTMAX; CNT++ )) ; do
     PASS=0 
-    ANS=(`echo ${LISTHOST[@]} | grep $HOSTPREFIX$CNT `)
+    ANS=(`echo ${LISTHOST[@]} | grep -w $HOSTPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then
       PASS=1
     fi
@@ -380,7 +381,7 @@ freehost() {
       return 0
     fi
   done
-  die 5 "Brak wolnych hostów"
+  die 15 "Brak wolnych hostów"
 }
  
 # Sprawdza dostępność routera Quagga
@@ -403,7 +404,7 @@ freerouter() {
   LISTROUTER=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT=0; CNT<$QUAGGAMAX; CNT++ )) ; do
     PASS=0 
-    ANS=(`echo ${LISTROUTER[@]} | grep $QUAGGAPREFIX$CNT `)
+    ANS=(`echo ${LISTROUTER[@]} | grep -w $QUAGGAPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then
       PASS=1
     fi
@@ -412,7 +413,7 @@ freerouter() {
       return 0
     fi
   done
-  die 5 "Brak wolnych routerów"
+  die 16 "Brak wolnych routerów"
 }
  
 # Sprawdza dostępność łącza phlink
@@ -435,7 +436,7 @@ freephlink() {
   LISTPHLINK=(`docker ps -a | sed -n -e '1!p' | awk '{ print $(NF) }' `)
   for (( CNT=0; CNT<$PHMAX; CNT++ )) ; do
     PASS=0 
-    ANS=(`echo ${LISTPHLINK[@]} | grep $PHPREFIX$CNT `)
+    ANS=(`echo ${LISTPHLINK[@]} | grep -w $PHPREFIX$CNT `)
     if [[ -n ${ANS[@]} ]] ; then
       PASS=1
     fi
@@ -444,7 +445,7 @@ freephlink() {
       return 0
     fi
   done
-  die 5 "Brak wolnych łączy phlink"
+  die 17 "Brak wolnych łączy phlink"
 }
  
 # Sprawdza dostępność interfejsów w kontenerze
@@ -479,7 +480,7 @@ freeinterface() {
       return 0
     fi
   done
-  die 5 "Brak wolnych interfejsow"
+  die 18 "Brak wolnych interfejsow"
 }
 
  
@@ -546,7 +547,7 @@ comparenet() {
     fi
     return
   fi
-  die 20 "Bład w funkcji comparenet()"
+  die 91 "Bład w funkcji comparenet()"
 }
 
 # Zwraca wolny adres IP dla sieci zgodnej z zadanym IP
@@ -675,7 +676,7 @@ freeip() {
               if [[ "$I0" -lt "$B0" ]] ; then
                 I0=$[I0+1]
               else
-                die 28 "======== BRAK WOLNEGO ADRESU IP W PODANEJ SIECI ======="
+                die 19 "Brak wolnego adresu IP w podanej sieci"
               fi
             fi
           fi 
@@ -708,10 +709,10 @@ checkipall() {
     comparenet "$1" "0.0.0.0"
     NET11="${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1"
     if [[ "$NET11" == "$1" ]] ; then
-      die 64 "Adres IP $1 nie może być adresem sieci."
+      die 70 "Adres IP $1 nie może być adresem sieci."
     fi
     if [[ "${BROADCAST1[0]}.${BROADCAST1[1]}.${BROADCAST1[2]}.${BROADCAST1[3]}/$M1" == "$1" ]] ; then
-      die 26 "Adres IP $1 nie może być adresem broadcast."
+      die 71 "Adres IP $1 nie może być adresem broadcast."
     fi
 
     STAT=1				# Domyslnie IP jest poza adresacja sieci w testowanym kontenerze
@@ -724,7 +725,7 @@ checkipall() {
       for (( CNT=0; CNT<$LISTIPMAX; CNT=$CNT+2 )) ; do
   
      #   if [[ "$1" = "${LISTIP[$CNT]}" ]] ; then
-     #     die 15 "Konflikt adresów IP $1 w kontenerze ${LISTCONTAINER[$CNT2]}"
+     #     die 100 "Konflikt adresów IP $1 w kontenerze ${LISTCONTAINER[$CNT2]}"
      #     return 		# Podane IP jest w konflikcie z IP w danym kontenerze
      #   fi
         comparenet "$1" "${LISTIP[$CNT]}"
@@ -749,7 +750,7 @@ checkipall() {
              tmp=$1; tmp2=${LISTCONTAINER[$CNT2]}
              msg "${R}Wykryto konflikt adresów ...${BCK}"
              freeip $1
-             die 15 "Konflikt adresów IP $tmp w kontenerze $tmp2." "${BCK}Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: ${G}$NEWIP${BCK}"
+             die 92 "Konflikt adresów IP $tmp w kontenerze $tmp2." "${BCK}Pierwszy wolny adres w sieci ${NET1[0]}.${NET1[1]}.${NET1[2]}.${NET1[3]}/$M1 to: ${G}$NEWIP${BCK}"
             ;;
         esac
       done
@@ -757,7 +758,7 @@ checkipall() {
     msg "Brak konfliku dla adresu ${G}$1${BCK}"
     return
   elseif
-    die 12 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
+    die 72 "Niepoprawne dane lub format adresu sieci w funkcji <checkip>."
   fi
 }
 
@@ -863,7 +864,7 @@ freenet() {
               if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
                 NETM[0]=$[NETM[0]+NEGM[0]]
               else
-                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+                die 20 "Brak wolnej sieci IP w podanym zakresie maski"
               fi
             fi
           fi     
@@ -881,7 +882,7 @@ freenet() {
               if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
                  NETM[0]=$[NETM[0]+NEGM[0]]
                else
-                 die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+                 die 20 "Brak wolnej sieci IP w podanym zakresie maski"
               fi
             fi
           fi
@@ -894,7 +895,7 @@ freenet() {
               if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
                 NETM[0]=$[NETM[0]+NEGM[0]]
               else
-                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+                die 20 "Brak wolnej sieci IP w podanym zakresie maski"
               fi
             fi
           else
@@ -902,7 +903,7 @@ freenet() {
               if [[ "$[NETM[0]+NEGM[0]]" -lt "256" ]] ; then
                 NETM[0]=$[NETM[0]+NEGM[0]]
               else
-                die 28 "======== BRAK WOLNEj SIECI IP W PODANYM ZAKRESIE MASKI ======="
+                die 20 "Brak wolnej sieci IP w podanym zakresie maski"
               fi
             fi
           fi
@@ -1351,7 +1352,7 @@ crt_linkif2ph2() {
 }
 
 crt_linkif1docker0() {
-  IPM5=(`docker exec ${CFG[32]} ip a | grep eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+  IPM5=(`docker exec ${CFG[32]} ip a | grep -w eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
   IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
   msg "Polaczenie łącza phlink ${CFG[32]}"
   # Konfiguracja daemona ZEBRA w routerze
@@ -1367,7 +1368,7 @@ crt_linkif1docker0() {
 }
 
 crt_linkif2docker0() {
-  IPM5=(`docker exec ${CFG[33]} ip a | grep eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
+  IPM5=(`docker exec ${CFG[33]} ip a | grep -w eth0 | awk '/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\// {print $2,$(NF)}' `)
   IP5=(`echo $IPM5 | awk -F/ '{print $1}' `)
   msg "Polaczenie łącza phlink ${CFG[33]}"
   # Konfiguracja daemona ZEBRA w routerze
@@ -1414,7 +1415,7 @@ crt_brinqos() {
 
 
 set_link() {
-
+#set -x
   msg "Kofiguracja parametrów łącza:"
   msg "Pasmo ${G}${CFG[9]}/${CFG[10]}${BCK} z opóżnieniem ${G}${CFG[13]}/${CFG[14]}${BCK}"
   msg "Utrata pakietów ${G}${CFG[11]}/${CFG[12]}${BCK}  duplikowanie ${G}${CFG[28]}/${CFG[29]}${BCK}"
@@ -1498,11 +1499,11 @@ set_link() {
     BND1=${BND1}${JDB1}
     BND2=(`echo "scale=3; (${BND2}*${BND_WSK}*1)" | bc `)
     BND2=${BND2}${JDB2}
-    BRST1=${BRST1}${JD1}
-    BRST2=${BRST2}${JD2}
+    BRST1=${BRST1}${JD1}B
+    BRST2=${BRST2}${JD2}B
 
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${BND1} burst $BRST1 latency 2ms mpu 64 `)
-ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${BND2} burst $BRST2 latency 2ms mpu 64 `)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} limit 1540 mpu 64 `)
+ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} limit 1540 mpu 64 `)
 
 #ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} latency 2ms mpu 64 `)
 #ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} latency 2ms mpu 64 `)
@@ -1521,9 +1522,8 @@ ANS=(`docker exec ${CFG[0]} tc qdisc add dev ${CFG[26]} parent 1: handle 2: nete
   echo $BUF > buffor_cfg.dat
   docker cp buffor_cfg.dat ${CFG[0]}:/buffor_cfg.dat
   rm -f buffor_cfg.dat
-
+#set +x
 }
-
 
 upgrade_link() {
   rm -f buffor_cfg.dat
@@ -1672,21 +1672,14 @@ upgrade_link() {
     BRST1=${BRST1}${JD1}B
     BRST2=${BRST2}${JD2}B
 
-echo $BND1
-echo $BND2
-echo $BRST1
-echo $BRST2  
+#echo $BND1
+#echo $BND2
+#echo $BRST1
+#echo $BRST2  
 
-# veth1pl13138
-#10000 287
-#
-#
-#
 
-#  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${BND2} burst $BRT limit 1540 mpu 64 `)
-
- ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} latency 2ms mpu 64 `)
- ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} latency 2ms mpu 64 `)
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} root handle 1: tbf rate ${BND1} burst ${BRST1} limit 1540 mpu 64 `)
+ ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} root handle 1: tbf rate ${BND2} burst ${BRST2} limit 1540 mpu 64 `)
 
  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[25]} parent 1: handle 2: netem delay ${CFG2[13]} loss ${CFG2[11]} duplicate ${CFG2[28]} `)
  ANS=(`docker exec ${CFG2[0]} tc qdisc change dev ${CFG2[26]} parent 1: handle 2: netem delay ${CFG2[14]} loss ${CFG2[12]} duplicate ${CFG2[29]} `)
@@ -1712,7 +1705,7 @@ chk_band() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?[MmKkgG]bit$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])bit$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
-    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+    die 73 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
 }
@@ -1724,7 +1717,7 @@ chk_loss() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^(100|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
-    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+    die 74 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
 }
@@ -1736,7 +1729,7 @@ chk_delay() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?ms$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])ms$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
-    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+    die 75 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
 }
@@ -1748,7 +1741,7 @@ chk_duplic() {
   ANS1=(`echo ${CFG[$1]} | grep -E "^(1000|[1-9][0-9][0-9]|[1-9][0-9]|[0-9])(\.[0-9][0-9]*)?%$"`)
   ANS2=(`echo ${CFG[$1]} | grep -E "^([1-9][0-9][0-9]*|[1-9][0-9]|[0-9])$"`)
   if ! [[ -n $ANS1 || -n $ANS2 ]] ; then
-    die 60 "Niepoprawny format parametru ${WSK[$1]}"
+    die 76 "Niepoprawny format parametru ${WSK[$1]}"
   fi
   return
 }
@@ -1857,7 +1850,7 @@ case "$1" in
     for (( CNT=0; CNT<${#LINK[@]}; CNT++ )) ; do
       message="$message   ${LINK[$CNT]}"
     done
-    die 58 "Nieprawidłowy parametr -link \nDostępne: \n         $message"
+    die 77 "Nieprawidłowy parametr -link \nDostępne: \n         $message"
 esac
 return 0
 }
@@ -1869,16 +1862,16 @@ upgrade_container() {
   STAT3="nie"					# Czy wykonano aktualizację
   if [[ -n ${CFG[15]} ]] ; then			# Sprawdzenie poprawności
     if ! checklink ${CFG[15]}  ; then		# i wczytanie parametrów łącza
-      die 8 "Niepoprawna nazwa łącza"
+      die 78 "Niepoprawna nazwa łącza"
     fi
   fi
-  ANS=(`docker ps -a | grep ${CFG[20]}`)
+  ANS=(`docker ps -a | grep -w ${CFG[20]}`)
   if [[ -n $ANS ]] ; then
     # ---  Aktualizacja po nazwie kontenera Qoslink
     CONTAINERLINK=(` docker inspect ${CFG[20]} | grep /qoslink: `)
     CONTAINERRUN=(` docker inspect ${CFG[20]} | grep -E "Running.*true" `)
     if [[ ! -n $CONTAINERRUN ]] ; then			# Kontener zatrzyman
-      die 61 "Podany kontener <${CFG[20]}> jest zatrzymany"
+      die 53 "Podany kontener <${CFG[20]}> jest zatrzymany"
   
     elif [[ -n $CONTAINERLINK ]] ; then			# Kontener typu qoslink
       msg "${Y}Przed zmianą:${BCK}"
@@ -1888,7 +1881,7 @@ upgrade_container() {
       msg "Gotowe."
       exit 0
     else
-      die 62 "Podany kontener ${CFG[20]} nie zawiera informacji o parametrach łącza"
+      die 54 "Podany kontener ${CFG[20]} nie zawiera informacji o parametrach łącza"
     fi
   else
     # ---   Aktualizacja po adresie IP
@@ -1900,7 +1893,7 @@ upgrade_container() {
         rm -f buffor_cfg.dat
         docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat   # Odczyt danych
         if [[ ! -e "buffor_cfg.dat" ]] ; then
-          die 68 "Błąd w odczycie pliku konfiguracyjnego łącza"
+          die 55 "Błąd w odczycie pliku konfiguracyjnego łącza"
         fi
         CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
         for (( CNT4=0; CNT4<${#WSK[@]}; CNT4++ )) ; do
@@ -1943,7 +1936,7 @@ read_dsp_cnt() {
   rm -f buffor_cfg.dat		
   docker cp $1:/buffor_cfg.dat buffor_cfg.dat	# Odczyt danych
   if [[ ! -e "buffor_cfg.dat" ]] ; then
-    die 63 "Podany kontener nie jest typu <qoslink>, nie zawiera informacji o stanie łącza"
+    die 56 "Podany kontener nie jest typu <qoslink>, nie zawiera informacji o stanie łącza"
   fi
   CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
   for (( CNT=0; CNT<${#WSK[@]}; CNT++ )) ; do
@@ -1995,6 +1988,12 @@ read_dsp_cnt() {
   if [[ -z ${CFG2[31]} ]] ; then
     CFG2[31]="${BLK}--------------${BCK}"
   fi
+  if [[ -z ${CFG2[7]} ]] ; then
+    CFG2[7]="${BLK}--------${BCK}"
+  fi
+  if [[ -z ${CFG2[8]} ]] ; then
+    CFG2[8]="${BLK}--------${BCK}"
+  fi
   M=(`echo ${CFG2[23]} | awk -F/ '{print $2}' `)	# odczyt adresu sieci na podstawie IP qoslink'a
   N=(` ipcalc ${CFG2[23]} -n | awk -F= '{print $2}' | awk -F. '{print $1,$2,$3,$4}' `)
   NM="${N[0]}.${N[1]}.${N[2]}.${N[3]}/$M"
@@ -2003,9 +2002,11 @@ read_dsp_cnt() {
   msg "${TYPESIDE1} \t\t\t \t\t \t\t\t ${TYPESIDE2}"
   msg "${DEVSIDE1} \t\t\t -c:${Y}${CFG2[0]}${BCK} \t\t\t ${DEVSIDE2}" 
   msg "-if1:${CFG2[3]} \t\t\t -link:${CFG2[15]} \t\t\t -if2:${CFG2[4]}"
-  msg "-ip1:${GB}${CFG2[5]}${BCK} \t\t -ip3:${CFG2[23]} \t\t -ip2:${GB}${CFG2[6]}${BCK}"
-  msg "-gw1:${CFG2[30]} \t\tnetwork ${NM}\t\t -gw2:${CFG2[31]}"
-#  msg "-gw1:${CFG2[30]} \t\t \t\t \t\t -gw2:${CFG2[31]}"
+  msg "-ip1:${CFG2[5]} \t\t -ip3:${CFG2[23]} \t\t -ip2:${CFG2[6]}"
+#  msg "-ip1:${GB}${CFG2[5]}${BCK} \t\t -ip3:${CFG2[23]} \t\t -ip2:${GB}${CFG2[6]}${BCK}"
+  msg "-br1:${CFG2[7]} \t\t\tnetwork ${NM}\t\t -br2:${CFG2[8]}"
+  msg "-gw1:${CFG2[30]} \t\t\t\t\t\t -gw2:${CFG2[31]}"
+#  msg "-gw1:${CFG2[30]} \t\t \t \t\t -gw2:${CFG2[31]}"
   msg "\t-band1  \t\t${G}${CFG2[9]}${BCK}\t-->\t<--  ${G}${CFG2[10]}${BCK}\t-band2"
   msg "\t-loss1  \t\t${G}${CFG2[11]}${BCK}\t-->\t<--  ${G}${CFG2[12]}${BCK}\t-loss2"
   msg "\t-delay1 \t${G}${CFG2[13]}${BCK}\t-->\t<--  ${G}${CFG2[14]}${BCK}\t-delay2"
@@ -2024,13 +2025,13 @@ prn_container() {
     CONTAINERLINK=(` docker inspect ${CFG[38]} | grep /qoslink: `)
     CONTAINERRUN=(` docker inspect ${CFG[38]} | grep -E "Running.*true" `)
     if [[ ! -n $CONTAINERRUN ]] ; then	# Kontener zatrzyman
-      die 61 "Podany kontener <${CFG[38]}> jest zatrzymany"
+      die 57 "Podany kontener <${CFG[38]}> jest zatrzymany"
 
     elif [[ -n $CONTAINERLINK ]] ; then	# Kontener typu qoslink
       read_dsp_cnt ${CFG[38]}
 
     else
-      die 62 "Podany kontener ${CFG[38]} nie zawiera informacji o parametrach łącza"
+      die 58 "Podany kontener ${CFG[38]} nie zawiera informacji o parametrach łącza"
     fi
   else
     # ---   Wyświetlanie po adresie IP
@@ -2042,7 +2043,7 @@ prn_container() {
         rm -f buffor_cfg.dat
         docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat   # Odczyt danych
         if [[ ! -e "buffor_cfg.dat" ]] ; then
-          die 68 "Błąd w odczycie pliku konfiguracyjnego łącza"
+          die 59 "Błąd w odczycie pliku konfiguracyjnego łącza"
         fi
         CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
         for (( CNT4=0; CNT4<${#WSK[@]}; CNT4++ )) ; do
@@ -2074,7 +2075,7 @@ prn_container() {
 	    # Wyświetlenie po nazwie urządzenia (host, switch, router)
             # Zmienna DEVICE - lista urządzeń w danym łączu
             DEVICE=(` echo ${CFG2[1]}_${CFG2[2]}_${CFG2[16]}_${CFG2[17]}_${CFG2[18]}_${CFG2[19]}_${CFG2[32]}_${CFG2[33]} `)
-            ANS=(` echo $DEVICE | grep "${CFG[38]}" `)  
+            ANS=(` echo $DEVICE | grep -w "${CFG[38]}" `)  
             if [[ -n $ANS ]] ; then
               read_dsp_cnt ${CFG2[0]}
               STAT3="tak"     
@@ -2117,7 +2118,7 @@ prn_allcontainer() {
 # ----- Po nazwie kontenera Qoslink lub adresie IP interfejsu
 # ------------------------------------------------------------
 del_container() {
-  ANS=(`docker ps -a | grep ${CFG[27]}`)
+  ANS=(`docker ps -a | grep -w ${CFG[27]}`)
   if [[ -n $ANS ]] ; then
     # ---  Kasowanie po nazwie kontenera Qoslink
     CONTAINERLINK=(` docker inspect ${CFG[27]} | grep qoslink: `)
@@ -2125,7 +2126,7 @@ del_container() {
     CONTAINERHOST=(` docker inspect ${CFG[27]} | grep host: `)
        CONTAINERRUN=(` docker inspect ${CFG[27]} | grep -E "Running.*true" `)
     if [[ ! -n $CONTAINERRUN ]] ; then			# Kontener zatrzyman
-      die 61 "Podany kontener <${CFG[27]}> jest zatrzymany"
+      die 60 "Podany kontener <${CFG[27]}> jest zatrzymany"
     elif [[ -n $CONTAINERLINK ]] ; then			# Kasowanie qoslink
       msg "Usuwanie kontenera typu qoslink: "${G}${CFG[27]}${BCK}""
     elif [[ -n $CONTAINERQUAGGA ]] ; then		# Kasowanie routera
@@ -2152,13 +2153,13 @@ del_container() {
       fi
     done
     # Usuwanie bridgy z systemu dodanych przez skrypt 
-    LISTBRIDGE=(`nmcli d | grep $BRPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
+    LISTBRIDGE=(`nmcli d | grep -w $BRPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
     for (( CNT=0; CNT<${#LISTBRIDGE[@]}; CNT++ )) ; do
      msg "Usuwanie bridga ${G}${LISTBRIDGE[$CNT]}${BCK}"
      ANS=(`ip link set ${LISTBRIDGE[$CNT]} down`) 
      ANS=(`brctl delbr ${LISTBRIDGE[$CNT]}`) 
     done
-    LISTSWITCH=(`nmcli d | grep $SWPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
+    LISTSWITCH=(`nmcli d | grep -w $SWPREFIX[[:digit:]] | awk '{ print $1 }' | sort`)
     for (( CNT=0; CNT<${#LISTSWITCH[@]}; CNT++ )) ; do
      msg "Usuwanie switcha ${G}${LISTSWITCH[$CNT]}${BCK}"
      ANS=(`ip link set ${LISTSWITCH[$CNT]} down`) 
@@ -2176,7 +2177,7 @@ del_container() {
         rm -f buffor_cfg.dat
         docker cp ${LISTCONTAINER[$CNT3+1]}:/buffor_cfg.dat buffor_cfg.dat   # Odczyt danych
         if [[ ! -e "buffor_cfg.dat" ]] ; then
-          die 68 "Błąd w odczycie pliku konfiguracyjnego łącza"
+          die 61 "Błąd w odczycie pliku konfiguracyjnego łącza"
         fi
         CFG2=(` awk 'BEGIN { RS = ":" } ; { print $0 }' buffor_cfg.dat `)
         for (( CNT4=0; CNT4<${#WSK[@]}; CNT4++ )) ; do
@@ -2217,7 +2218,7 @@ save_container() {
     LISTFILE=(`ls`)		
     PASS=0
     for (( CNT=0; CNT<$FILEMAX; CNT++ )) ; do
-      ANS=(`echo ${LISTFILE[@]} | grep ${FILEPREFIX}${CNT}\.dat `)
+      ANS=(`echo ${LISTFILE[@]} | grep ${FILEPREFIX}${CNT}`)
       if [[ -z ${ANS[@]} ]] ; then 
         PASS=1
       fi
@@ -2227,7 +2228,7 @@ save_container() {
       fi
     done
     if [[ $PASS -eq 0 ]] ; then
-      die 6 "Brak wolnych nazw plików"
+      die 21 "Brak wolnych nazw plików"
     fi
   fi
   if [ -e "${CFG[39]}.dat" ] ; then
@@ -2266,7 +2267,7 @@ save_container() {
 
 load_container() {
   if [ ! -e ${CFG[40]}.dat ] ; then
-    die 86 "Podany plik ${CFG[40]}.dat nie istnieje"
+    die 62 "Podany plik ${CFG[40]}.dat nie istnieje"
   fi 
   CFG21=${CFG[21]}
   CFGALL=(`cat ${CFG[40]}.dat`)
@@ -2467,7 +2468,7 @@ load_container() {
       ;;
 *)
 
-      die 97 "Nieprawidłowe zestawienie parametrów przy odczycie"
+      die 79 "Nieprawidłowe zestawienie parametrów przy odczycie"
 
     esac
 		
@@ -2515,7 +2516,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
       CFGNEXT=${CFGNEXT:0:1}		# lub pusty ciąg oznacza brak argumentu 
       					# w bieżacym parametrze (np. -sw1 -h2 serwer
       # Parametry mogace wystepować bez argumentów	
-      PARAM_AUTO="_-h1_-h2_-r1_-r2_-ph1_-ph2_-sw1_-sw2_-gw1_-gw2_-D_-P_-U_-S_-L_"
+      PARAM_AUTO="_-h1_-h2_-r1_-r2_-ph1_-ph2_-sw1_-sw2_-gw1_-gw2_-D_-P_-U_-S_-L_-?_"
 
       ANS=(` echo $PARAM_AUTO | grep "_${PARAM[$CNT]}_" `)
 
@@ -2525,7 +2526,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
 	# Jeżeli tak, czy jest za nim kolejny argument
         if [[ -n ${CFG[$CNT2]} ]] ; then
 
-	  # Jeżeli tak, czy kolejna pozycja jest ocją czy wartością
+	  # Jeżeli tak, czy kolejna pozycja jest opcją czy wartością
           if [[ "$CFGNEXT" = "-" ]] ; then
 
 	    # Jeżeli opcją to oznacza bieżacy parametr za bezargumentowy
@@ -2551,6 +2552,11 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
         MV=1
       fi
 
+      if [ ${PARAM[$CNT]} = "-?" ] ; then		# Wyswietlanie pomocy
+        CFG[$CNT2]=0
+        MV=1
+      fi
+
       
       if [ "$MV" -eq "1" ] ; then
         MV=0			# Opcja bezargumentowa 
@@ -2565,7 +2571,7 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   CFGIT=${CFGIT:0:1}	
   # Jeżeli jest z "-" i nie ma w tablicy WSK[] => błąd	
   if [[ "$STAT" = "0" && "$CFGIT" = "-" ]] ; then
-    die 69 "Podano nieprawidłową opcję : ${PARAM[$CNT]}"
+    die 80 "Podano nieprawidłową opcję : ${PARAM[$CNT]}"
   fi
 
   let CNT1=CNT+1
@@ -2574,10 +2580,16 @@ for (( CNT=0; CNT<$CNTPARAM; CNT++ )) ; do
   if [[ "${CNT1}" -ne "${#PARAM[@]}" ]] ; then
     if [[ "${PARAMTHIS}" != "-" ]] ; then # Wykrywa wprowadzane dane (np. host1) nie przyporzadkowane
                                         # do żadnej opcji  np. -v -r1 router host1 -ip1 10.0.0.2/24
-      die 98 "Nie podano nazwy opcji dla wprowadzonej danej \"${PARAM[CNT1]}\""
+      die 81 "Nie podano nazwy opcji dla wprowadzonej danej \"${PARAM[CNT1]}\""
     fi
   fi
 done
+
+# ----- Wyświetlenie pomocy
+# -------------------------
+if [[ -n ${CFG[41]} ]] ; then
+  view_help
+fi
 
 # Sprawdzenie i ewentualne utworzenie obrazów kontenerów Quaggalink i Qoslink
 # ---------------------------------------------------------------------------
@@ -2607,7 +2619,7 @@ if [[ -n ${CFG[40]} ]] ; then
   let CNT=CNT+1
 fi
 if [[ "$CNT" -gt "1" ]] ; then
-  die 99 "Wybierz tylko jedną z opcji \" -U -D -P -S -L \""
+  die 82 "Wybierz tylko jedną z opcji \" -U -D -P -S -L \""
 fi
 
 
@@ -2698,7 +2710,7 @@ if [[ -n ${CFG[34]} ]] ; then
     CFG[10]=${CFG[34]}
     CFG[15]="."
   else
-    die 60 "Niepoprawny format parametru -band"
+    die 83 "Niepoprawny format parametru -band"
   fi
 fi
 
@@ -2808,20 +2820,20 @@ fi
 # -----  Weryfikacja nazwy kontenera  -------
 if [[ -n ${CFG[0]} ]] ; then
   if checkcontainer "${CFG[0]}" ; then
-    die 3 "Nazwa kontenera z opcji -c ${CFG[0]} jest już utworzona w systemie"
+    die 22 "Nazwa kontenera z opcji -c ${CFG[0]} jest już utworzona w systemie"
   fi
 fi
 
 # -----  Weryfikacja bridgy  ----------
 if [[ -n ${CFG[7]} ]] ; then
   if checkbridge "${CFG[7]}" ; then
-    die 4 "Nazwa bridge'a z opcji -br1 ${CFG[7]} jest już utworzona w systemie"
+    die 23 "Nazwa bridge'a z opcji -br1 ${CFG[7]} jest już utworzona w systemie"
   fi
 fi
 
 if [[ -n ${CFG[8]} ]] ; then
   if checkbridge "${CFG[8]}" ; then
-    die 5 "Nazwa bridge'a z opcji -br2 ${CFG[8]} jest już utworzona w systemie"
+    die 24 "Nazwa bridge'a z opcji -br2 ${CFG[8]} jest już utworzona w systemie"
   fi
 fi
 
@@ -2841,28 +2853,28 @@ fi
 # -----  Weryfikacja interfejsu  IF1 w H1  -----
 if [[ -n ${CFG[3]} && `checkhost ${CFG[1]}` ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[1]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
+    die 25 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[1]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF2 w H2  -----
 if [[ -n ${CFG[4]} && `checkhost ${CFG[2]}` ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[2]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
+    die 26 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[2]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF1 w R1  -----
 if [[ -n ${CFG[3]} && `checkhost ${CFG[18]}` ]] ; then
   if checkinterface "${CFG[3]}" "${CFG[18]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[18]}"
+    die 27 "Nazwa interfejsu z opcji -if1 ${CFG[3]} jest już utworzona w kontenerze ${CFG[18]}"
   fi
 fi
 
 # -----  Weryfikacja interfejsu  IF2 w R2  -----
 if [[ -n ${CFG[4]} && `checkrouter ${CFG[19]}` ]] ; then
   if checkinterface "${CFG[4]}" "${CFG[19]}" ; then
-    die 5 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[19]}"
+    die 28 "Nazwa interfejsu z opcji -if2 ${CFG[4]} jest już utworzona w kontenerze ${CFG[19]}"
   fi
 fi
 
@@ -2884,35 +2896,35 @@ fi
 # ----  Weryfikacja poprawności IP1
 if [[ -n ${CFG[5]} ]] ; then
   if ! parseip ${CFG[5]}  ; then
-    die 8 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
+    die 84 "Niepoprawny format parametrow sieci dla -ip1. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
 
 # ----  Weryfikacja poprawności IP2
 if [[ -n ${CFG[6]} ]] ; then
   if ! parseip ${CFG[6]}  ; then
-    die 8 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
+    die 85 "Niepoprawny format parametrow sieci dla -ip2. (format: x.y.z.v/mask) mask:<1,29>"
   fi
 fi
 
 # ----  Weryfikacja poprawności GW1
 if [[ -n ${CFG[30]} && "${CFG[30]}" != "setdefault" ]] ; then
   if ! chk_gw ${CFG[30]}  ; then
-    die 8 "Niepoprawny format parametru bramy dla -gw1. (format: x.y.z.v)"
+    die 86 "Niepoprawny format parametru bramy dla -gw1. (format: x.y.z.v)"
   fi
 fi
 
 # ----  Weryfikacja poprawności GW2
 if [[ -n ${CFG[31]} && "${CFG[31]}" != "setdefault" ]] ; then
   if ! chk_gw ${CFG[31]}  ; then
-    die 8 "Niepoprawny format parametru bramy dla -gw2. (format: x.y.z.v)"
+    die 87 "Niepoprawny format parametru bramy dla -gw2. (format: x.y.z.v)"
   fi
 fi
 
 # ----  Weryfikacja poprawności A
 if [[ -n ${CFG[42]} ]] ; then
   if ! chk_a ${CFG[42]}  ; then
-    die 8 "Niepoprawny format parametru strefy dla -A. Liczba całkowita > 0"
+    die 88 "Niepoprawny format parametru strefy dla -A. Liczba całkowita > 0"
   fi
 fi
 
@@ -4118,7 +4130,7 @@ case "$KOD" in
     fi
     ;;
 *)
-    die 80 "${R}Nieprawidłowe zestawienie parametrów.${BCK}"    
+    die 89 "${R}Nieprawidłowe zestawienie parametrów skryptu.${BCK}"    
 esac
 
 msg "Gotowe"
