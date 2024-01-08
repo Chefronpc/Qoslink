@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Początek skryptu, linia 2480
+
 # Parametry wstępne -  Globalne
 # ----------------	# Domyślne nazwy:
 BRPREFIX="brlink"	# bridgy
@@ -2474,7 +2476,6 @@ load_container() {
 		
   done
 }
-
 
 # ---------------------------------------------------------------------------------------------
 #   QoSLink - skrypt symulujący sieć IP składającą się z łączy, switchy oraz routerów 
